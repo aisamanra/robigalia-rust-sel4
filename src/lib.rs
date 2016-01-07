@@ -116,14 +116,6 @@ enum GoOn {
     TooManyCaps, // WouldBlock,
 }
 
-pub use cspace::{CNode, SlotRef, Badge};
-pub use error::{ErrorDetails, LookupFailureKind};
-pub use endpoint::{Endpoint, RecvToken};
-pub use notification::Notification;
-pub use thread::{Thread, ThreadConfiguration};
-pub use domain::DomainSet;
-pub use irq::{IRQControl, IRQHandler};
-
 /// Sets the destination for capability transfer to the given slot.
 pub fn set_cap_destination(slot: SlotRef) {
     unsafe {
@@ -184,4 +176,11 @@ mod arch {
     include!("arch/arm.rs");
 }
 
+pub use cspace::{CNode, SlotRef, Badge, Window};
+pub use error::{ErrorDetails, LookupFailureKind};
+pub use endpoint::{Endpoint, RecvToken};
+pub use notification::Notification;
+pub use thread::{Thread, ThreadConfiguration};
+pub use domain::DomainSet;
+pub use irq::{IRQControl, IRQHandler};
 pub use arch::*;
