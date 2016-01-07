@@ -47,6 +47,20 @@ pub struct Badge {
     bits: seL4_CapData,
 }
 
+impl Badge {
+    pub fn new(val: u32) -> Badge {
+        let mut bits: seL4_CapData = unsafe { ::core::mem::zeroed() };
+        bits.set_Badge(val);
+        Badge {
+            bits: bits
+        }
+    }
+
+    pub fn get_value(&self) -> u32 {
+        self.bits.get_Badge()
+    }
+}
+
 impl SlotRef {
     /// Create a new slot reference from all component data
     #[inline(always)]
