@@ -9,8 +9,6 @@
 
 //! Controlling the domain of threads.
 
-use sel4_sys::*;
-
 cap_wrapper_inner!{
     #[doc = "Authority to set domains"]
     :DomainSet
