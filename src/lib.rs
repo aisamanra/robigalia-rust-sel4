@@ -167,6 +167,8 @@ mod notification;
 mod thread;
 mod domain;
 mod irq;
+mod alloc;
+
 #[cfg(all(target_arch = "x86", target_pointer_width = "32"))]
 mod arch {
     include!("arch/x86.rs");
