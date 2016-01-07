@@ -152,6 +152,22 @@ pub fn yield_now() {
     }
 }
 
+/// A handle for using core::fmt with seL4_DebugPutChar
+pub struct DebugOutHandle;
+impl ::core::fmt::Write for DebugOutHandle {
+    fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
+        for &b in s.as_bytes() {
+            unsafe { sel4_sys::seL4_DebugPutChar(b) };
+        }
+        Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! println {
+    ($($toks:tt)*) => (writeln!($crate::DebugOutHandle, $(toks)*))
+}
+
 mod cspace;
 mod error;
 mod endpoint;
