@@ -10,15 +10,27 @@
 use sel4_sys::*;
 use ToCap;
 
-cap_wrapper!{
+cap_wrapper_inner!{
+    #[doc = "Authority to create ASID pools"]
     :ASIDControl
+    #[doc = "Authority to create page directories"]
     :ASIDPool
+    #[doc = "Authority to use port-IO"]
     :IOPort
+    #[doc = "Authority to map IO page tables into a device's address space"]
     :IOSpace
-    :IOPageTable
-    :Page
-    :PageTable
-    :PageDirectory
+}
+cap_wrapper!{
+    #[doc = "A page table for the IOMMU"]
+    :IOPageTable seL4_IA32_IOPageTableObject
+    #[doc = "A page of physical memory that can be mapped into a vspace"]
+    :Page seL4_IA32_4K
+    #[doc = "A 'large page' (usually 4MiB) for use with PAE"]
+    :LargePage seL4_IA32_LargePage
+    #[doc = "A page table, which can have pages mapped into it"]
+    :PageTable seL4_IA32_PageTableObject
+    #[doc = "A page directory, which holds page tables and forms the root of the vspace"]
+    :PageDirectory seL4_IA32_PageDirectoryObject
 }
 
 impl ASIDControl {

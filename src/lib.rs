@@ -25,14 +25,27 @@
 extern crate sel4_sys;
 use sel4_sys::*;
 
+/// Canonical result type from invoking capabilities.
 pub type Result = core::result::Result<(), Error>;
 
 pub trait ToCap {
+    /// Unwrap this object into its raw capability pointer.
     fn to_cap(&self) -> seL4_CPtr;
 }
 
 pub trait FromCap: Sized {
+    /// Wrap a capability pointer with this type.
+    ///
+    /// Does no checking that the capability is to an object of the correct type.
     fn from_cap(cptr: seL4_CPtr) -> Self;
+}
+
+pub trait Allocatable {
+    /// Allocate an object, using memory from the untyped memory object and storing the capability
+    /// into `Window`.
+    ///
+    /// The number of objects to create is the `num_slots` field on the `Window`.
+    fn create(untyped_memory: seL4_CPtr, dest: Window, size_bits: isize) -> Result;
 }
 
 impl ToCap for seL4_CPtr {
@@ -50,20 +63,33 @@ impl FromCap for seL4_CPtr {
 }
 
 macro_rules! cap_wrapper {
+    ($($(#[$attr:meta])* : $name:ident $objtag:ident)*) => ($(
+        cap_wrapper_inner!($(#[$attr])* : $name);
+        impl ::Allocatable for $name {
+            fn create(untyped_memory: ::sel4_sys::seL4_CPtr, dest: ::cspace::Window, size_bits: isize) -> ::Result {
+                use ToCap;
+                errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as isize, size_bits, dest.cnode.root.to_cap(),
+                                    dest.cnode.index as isize, dest.cnode.depth as isize, dest.first_slot_idx as isize, dest.num_slots as isize));
+            }
+        }
+    )*)
+}
+
+macro_rules! cap_wrapper_inner {
     ($($(#[$attr:meta])* : $name:ident)*) => ($(
         #[derive(Debug, Copy, Clone, PartialEq, Eq)]
         $(#[$attr])* pub struct $name {
-            cptr: seL4_CPtr,
+            cptr: ::sel4_sys::seL4_CPtr,
         }
         impl ::ToCap for $name {
             #[inline(always)]
-            fn to_cap(&self) -> seL4_CPtr {
+            fn to_cap(&self) -> ::sel4_sys::seL4_CPtr {
                 self.cptr.to_cap()
             }
         }
         impl ::FromCap for $name {
             #[inline(always)]
-            fn from_cap(cptr: seL4_CPtr) -> Self {
+            fn from_cap(cptr: ::sel4_sys::seL4_CPtr) -> Self {
                 $name { cptr: cptr }
             }
         }

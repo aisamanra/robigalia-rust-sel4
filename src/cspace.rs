@@ -20,11 +20,29 @@ use ToCap;
 /// This is used to specify slots in CNode methods.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct SlotRef {
+    /// The CNode which acts as the "root" of this reference.
+    ///
+    /// The index and depth are interpreted relative to this CNode.
     pub root: CNode,
+    /// A CPtr, relative to the `root`, to the desired capability slot.
     pub index: seL4_Word,
+    /// Number of bits of `index` to resolve before stopping resolution.
     pub depth: u8,
 }
 
+/// A window into a CNode - a range of capability slots
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct Window {
+    /// Destination CNode to store the capabilities.
+    pub cnode: SlotRef,
+    /// Index into the capability slot table to start storing capabilities.
+    pub first_slot_idx: usize,
+    /// Number of slots starting at first_slot_idx to use.
+    pub num_slots: usize,
+}
+
+/// An unforgeable marker on a capability
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Badge {
     bits: seL4_CapData,
 }
@@ -154,5 +172,6 @@ impl SlotRef {
 }
 
 cap_wrapper!{
-    :CNode
+    #[doc = "Fixed-length table for storing capabilities"]
+    :CNode seL4_CapTableObject
 }

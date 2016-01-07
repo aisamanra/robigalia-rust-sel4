@@ -14,7 +14,7 @@ use {ToCap, Notification, CNode};
 
 cap_wrapper!{
     #[doc="A thread control block"]
-    :Thread
+    :Thread seL4_TCBObject
 }
 
 /// Thread configuration.

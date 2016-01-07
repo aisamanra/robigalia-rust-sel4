@@ -11,7 +11,8 @@
 
 use sel4_sys::*;
 
-cap_wrapper!{
+cap_wrapper_inner!{
+    #[doc = "Authority to set domains"]
     :DomainSet
 }
 

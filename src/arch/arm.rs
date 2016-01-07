@@ -10,7 +10,7 @@
 use sel4_sys::*;
 
 cap_wrapper!{
-    :ASIDControl
+    #[doc = "Authority to allocate ASID pools"] :ASIDControl
     :ASIDPool
     :Page
     :PageTable

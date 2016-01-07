@@ -12,8 +12,10 @@
 use sel4_sys::*;
 use ToCap;
 
-cap_wrapper!{
+cap_wrapper_inner!{
+    #[doc = "Authority to create IRQHandler capabilities"]
     :IRQControl
+    #[doc = "Authority to wait for and acknowledge IRQs"]
     :IRQHandler
 }
 

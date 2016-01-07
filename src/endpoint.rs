@@ -34,7 +34,7 @@ use sel4_sys::*;
 
 cap_wrapper!{
     #[doc="An endpoint for message passing"]
-    :Endpoint
+    :Endpoint seL4_EndpointObject
 }
 
 /// The result of a successful receive.
