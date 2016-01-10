@@ -186,3 +186,4 @@ pub use thread::{Thread, ThreadConfiguration};
 pub use domain::DomainSet;
 pub use irq::{IRQControl, IRQHandler};
 pub use arch::*;
+pub use alloc::{ObjectAllocator};
