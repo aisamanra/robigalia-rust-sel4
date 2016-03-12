@@ -39,8 +39,8 @@ impl ASIDControl {
     ///
     /// `untyped` must be 4KiB.
     #[inline(always)]
-    pub fn make_pool(&self, untyped: seL4_CPtr, dest: ::SlotRef) -> ::Result {
-        errcheck!(seL4_IA32_ASIDControl_MakePool(self.cptr, untyped, dest.root.to_cap(), dest.index, dest.depth));
+    pub fn make_pool(&self, untyped: Page, dest: ::SlotRef) -> ::Result {
+        errcheck!(seL4_IA32_ASIDControl_MakePool(self.cptr, untyped.to_cap(), dest.root.to_cap(), dest.cptr, dest.depth));
     }
 }
 

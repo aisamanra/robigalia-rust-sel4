@@ -69,7 +69,7 @@ macro_rules! cap_wrapper {
             fn create(untyped_memory: ::sel4_sys::seL4_CPtr, dest: ::cspace::Window, size_bits: isize) -> ::Result {
                 use ToCap;
                 errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as isize, size_bits, dest.cnode.root.to_cap(),
-                                    dest.cnode.index as isize, dest.cnode.depth as isize, dest.first_slot_idx as isize, dest.num_slots as isize));
+                                    dest.cnode.cptr as isize, dest.cnode.depth as isize, dest.first_slot_idx as isize, dest.num_slots as isize));
             }
         }
     )*)
@@ -105,8 +105,9 @@ macro_rules! errcheck {
 /// An error occured.
 ///
 /// Since seL4 stores error information in the IPC buffer, and copying that data is not free, to
-/// inspect the details of the error you must call `.details()`.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+/// inspect the details of the error you must call `.details()`. The `Debug` implementation will do
+/// this automatically, to aid debugging.
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Error(GoOn);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -116,17 +117,30 @@ enum GoOn {
     TooManyCaps, // WouldBlock,
 }
 
-/// Sets the destination for capability transfer to the given slot.
+impl core::fmt::Debug for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self.0 {
+            GoOn::CheckIPCBuf => match self.details() {
+                Some(deets) => write!(f, "{:?} ({})", deets, deets),
+                None => write!(f, "no error")
+            },
+            GoOn::TooMuchData => f.write_str("TooMuchData"),
+            GoOn::TooManyCaps => f.write_str("TooManyCaps"),
+        }
+    }
+}
+
+/// Sets the (thread-local) destination for capability transfer to the given slot.
 pub fn set_cap_destination(slot: SlotRef) {
     unsafe {
         let buf = seL4_GetIPCBuffer();
         (*buf).receiveCNode = slot.root.to_cap();
-        (*buf).receiveIndex = slot.index as seL4_Word;
+        (*buf).receiveIndex = slot.cptr as seL4_Word;
         (*buf).receiveDepth = slot.depth as seL4_Word;
     }
 }
 
-/// Gets the current capability transfer destination.
+/// Gets the current (thread-local) capability transfer destination.
 pub fn get_cap_destination() -> SlotRef {
     unsafe {
         let buf = seL4_GetIPCBuffer();
@@ -157,7 +171,7 @@ impl ::core::fmt::Write for DebugOutHandle {
 
 #[macro_export]
 macro_rules! println {
-    ($($toks:tt)*) => (writeln!($crate::DebugOutHandle, $(toks)*))
+    ($($toks:tt)*) => ({ use ::core::fmt::Write; let _ = writeln!($crate::DebugOutHandle, $($toks)*); })
 }
 
 mod cspace;
@@ -178,7 +192,7 @@ mod arch {
     include!("arch/arm.rs");
 }
 
-pub use cspace::{CNode, SlotRef, Badge, Window};
+pub use cspace::{CNode, SlotRef, Badge, Window, CNodeInfo};
 pub use error::{ErrorDetails, LookupFailureKind};
 pub use endpoint::{Endpoint, RecvToken};
 pub use notification::Notification;

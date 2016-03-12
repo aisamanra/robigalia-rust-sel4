@@ -22,7 +22,7 @@ cap_wrapper_inner!{
 impl IRQControl {
     /// Create an IRQ handler capability, storing it in `slot`.
     pub fn get(&self, irq: isize, slot: ::SlotRef) -> ::Result {
-        errcheck!(seL4_IRQControl_Get(self.cptr, irq, slot.root.to_cap(), slot.index, slot.depth));
+        errcheck!(seL4_IRQControl_Get(self.cptr, irq, slot.root.to_cap(), slot.cptr, slot.depth));
     }
 }
 
