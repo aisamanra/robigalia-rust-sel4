@@ -9,26 +9,22 @@
 
 //! Traits for basic object allocation and cspace management.
 
-use sel4_sys::*;
-use {CNode, Allocatable, SlotRef, Error};
+use {Allocatable, SlotRef};
 
 /// Interface for allocating objects.
 pub trait ObjectAllocator {
-    /// Allocate a slot in the CSpace rooted at `relative_to` if it is `Some`. Otherwise, allocate
-    /// a slot in this thread's CSpace.
-    fn allocate_slot(&self, relative_to: Option<CNode>) -> Option<seL4_CPtr>;
-    /// Mark a slot unused and available for allocation.
-    fn free_slot(&self, cptr: seL4_CPtr);
+    type ObjectAllocError;
+    type SlotFreeError;
+    type ObjectFreeError;
 
-    /// Return the full-qualified slot reference for a CPtr, for use in `allocate_object`.
-    ///
-    /// Note: this is required because the object allocator knows what the cspace layout looks
-    /// like, and other code might not.
-    fn relativize(&self, cptr: seL4_CPtr) -> Option<SlotRef>;
+    /// Otherwise, allocate a slot in this thread's CSpace.
+    fn allocate_slot(&self) -> Option<SlotRef>;
+    /// Mark a slot unused and available for allocation.
+    fn free_slot(&self, slot: SlotRef) -> Result<(), Self::SlotFreeError>;
 
     /// Allocate an object, storing the capability into the specified slot.
-    fn allocate_object<T: Allocatable>(&self, dest: SlotRef) -> Result<Option<T>, Error>;
+    fn allocate_object<T: Allocatable>(&self, dest: SlotRef) -> Result<Option<T>, Self::ObjectAllocError>;
     /// Free an object, deleting it (thus removing it from the capability derivation tree) and
     /// return the memory for use by the allocator.
-    fn free_object<T: Allocatable>(&self, obj: T) -> Result<(), Error>;
+    fn free_object<T: Allocatable>(&self, obj: T) -> Result<(), Self::ObjectFreeError>;
 }
