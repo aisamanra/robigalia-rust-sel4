@@ -14,7 +14,7 @@ use {ToCap, Notification, CNode};
 
 cap_wrapper!{
     #[doc="A thread control block"]
-    :Thread seL4_TCBObject
+    :Thread seL4_TCBObject |_| if cfg!(target_arch = "arm") { 512 } else if cfg!(target_arch = "x86") { 1024 } else { unimplemented!() }
 }
 
 /// Thread configuration.

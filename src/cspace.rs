@@ -317,5 +317,5 @@ impl Window {
 
 cap_wrapper!{
     #[doc = "Fixed-length table for storing capabilities"]
-    :CNode seL4_CapTableObject
+    :CNode seL4_CapTableObject |i| 16*i
 }

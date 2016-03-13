@@ -22,15 +22,15 @@ cap_wrapper_inner!{
 }
 cap_wrapper!{
     #[doc = "A page table for the IOMMU"]
-    :IOPageTable seL4_IA32_IOPageTableObject
+    :IOPageTable seL4_IA32_IOPageTableObject |_| 1 << 10
     #[doc = "A page of physical memory that can be mapped into a vspace"]
-    :Page seL4_IA32_4K
-    #[doc = "A 'large page' (usually 4MiB) for use with PAE"]
-    :LargePage seL4_IA32_LargePage
+    :Page seL4_IA32_4K |_| 1 << 10
+    #[doc = "A 'large page' (4MiB) for use with PAE"]
+    :LargePage seL4_IA32_LargePage |_| 1 << 22
     #[doc = "A page table, which can have pages mapped into it"]
-    :PageTable seL4_IA32_PageTableObject
+    :PageTable seL4_IA32_PageTableObject |_| 1 << 10
     #[doc = "A page directory, which holds page tables and forms the root of the vspace"]
-    :PageDirectory seL4_IA32_PageDirectoryObject
+    :PageDirectory seL4_IA32_PageDirectoryObject |_| 1 << 10
 }
 
 impl ASIDControl {

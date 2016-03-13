@@ -19,17 +19,17 @@ cap_wrapper_inner!{
 
 cap_wrapper!{
     #[doc = "A 4K page of physical memory mapped into a page table"]
-    :SmallPage seL4_ARM_SmallPageObject
+    :SmallPage seL4_ARM_SmallPageObject |_| 1 << 10
     #[doc = "A 64K page of physical memory mapped into a page table"]
-    :LargePage seL4_ARM_LargePageObject
+    :LargePage seL4_ARM_LargePageObject |_| 1 << 16
     #[doc = "A 1M page of physical memory mapped into a page directory"]
-    :Section seL4_ARM_SectionObject
+    :Section seL4_ARM_SectionObject |_| 1 << 20
     #[doc = "A 16M page of physical memory mapped into a page directory"]
-    :SuperSection seL4_ARM_SuperSectionObject
+    :SuperSection seL4_ARM_SuperSectionObject |_| 1 << 24
     #[doc = "A page table, which can have pages mapped into it"]
-    :PageTable seL4_ARM_PageTableObject
+    :PageTable seL4_ARM_PageTableObject |_| 1 << 10
     #[doc = "A page directory, which holds page tables or sections and forms the root of the vspace"]
-    :PageDirectory seL4_ARM_PageDirectoryObject
+    :PageDirectory seL4_ARM_PageDirectoryObject |_| 1 << 14
 }
 
 impl ASIDControl {

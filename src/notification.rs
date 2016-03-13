@@ -11,7 +11,7 @@ use sel4_sys::*;
 
 cap_wrapper!{
     #[doc="A notification object for signalling"]
-    :Notification seL4_NotificationObject
+    :Notification seL4_NotificationObject |_| 16
 }
 
 impl Notification {
