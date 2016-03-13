@@ -275,6 +275,8 @@ pub struct Window {
     /// Destination CNode to store the capabilities.
     pub cnode: SlotRef,
     /// Index into the CNode specified by `cnode` to start storing capabilities.
+    ///
+    /// That is, the first radix to start using.
     pub first_slot_idx: usize,
     /// Number of slots starting at first_slot_idx to use.
     pub num_slots: usize,
