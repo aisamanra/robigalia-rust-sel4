@@ -35,22 +35,6 @@ impl IRQHandler {
         errcheck!(seL4_IRQHandler_Ack(self.cptr));
     }
 
-    /// Set the mode of this IRQ.
-    #[inline(always)]
-    pub fn set_mode(&self, level_triggered: bool, low_polarity: bool) -> ::Result {
-        let level_triggered = if level_triggered {
-            1
-        } else {
-            0
-        };
-        let low_polarity = if low_polarity {
-            1
-        } else {
-            0
-        };
-        errcheck!(seL4_IRQHandler_SetMode(self.cptr, level_triggered, low_polarity));
-    }
-
     /// Set the notification object to notify when an interrupt is received.
     #[inline(always)]
     pub fn set_notification(&self, notification: ::Notification) -> ::Result {

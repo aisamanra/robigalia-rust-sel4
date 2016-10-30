@@ -45,8 +45,8 @@ pub trait Allocatable {
     /// into `Window`.
     ///
     /// The number of objects to create is the `num_slots` field on the `Window`.
-    fn create(untyped_memory: seL4_CPtr, dest: Window, size_bits: isize) -> Result;
-    fn object_size(size_bits: isize) -> isize;
+    fn create(untyped_memory: seL4_CPtr, dest: Window, size_bits: seL4_Word) -> Result;
+    fn object_size(size_bits: seL4_Word) -> isize;
 }
 
 impl ToCap for seL4_CPtr {
@@ -67,14 +67,14 @@ macro_rules! cap_wrapper {
     ($($(#[$attr:meta])* : $name:ident $objtag:ident $size:expr)*) => ($(
         cap_wrapper_inner!($(#[$attr])* : $name);
         impl ::Allocatable for $name {
-            fn create(untyped_memory: ::sel4_sys::seL4_CPtr, dest: ::cspace::Window, size_bits: isize) -> ::Result {
+            fn create(untyped_memory: ::sel4_sys::seL4_CPtr, dest: ::cspace::Window, size_bits: ::sel4_sys::seL4_Word) -> ::Result {
                 use ToCap;
-                errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as isize, size_bits, dest.cnode.root.to_cap(),
-                                    dest.cnode.cptr as isize, dest.cnode.depth as isize, dest.first_slot_idx as isize, dest.num_slots as isize));
+                errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as seL4_Word, size_bits, dest.cnode.root.to_cap(),
+                                    dest.cnode.cptr as seL4_Word, dest.cnode.depth as seL4_Word, dest.first_slot_idx as seL4_Word, dest.num_slots as seL4_Word));
             }
 
-            fn object_size(size_bits: isize) -> isize {
-                $size(size_bits)
+            fn object_size(size_bits: seL4_Word) -> isize {
+                $size(size_bits) as isize
             }
         }
     )*)

@@ -6,16 +6,16 @@
 # except according to those terms.
 [package]
 name = "sel4"
-version = "0.0.2"
+version = "0.0.4"
 authors = ["Corey Richardson <corey@octayn.net>"]
 description = "High-level Rust interface to the seL4 kernel"
 documentation = "https://doc.robigalia.org/sel4"
 repository = "https://gitlab.com/robigalia/sel4"
 readme = "README.md"
-license = "MIT/Apache-2.0"
+license = "MIT OR Apache-2.0"
 
 [features]
 unstable = []
 
 [dependencies]
-sel4-sys = "0.0.20"
+sel4-sys = "0.0.22"
