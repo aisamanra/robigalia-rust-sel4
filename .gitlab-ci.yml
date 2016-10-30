@@ -2,8 +2,9 @@ build:
     image: registry.gitlab.com/robigalia/runner:latest
     script: 
         - "xargo build --target i686-sel4-unknown"
-        - "xargo build --target arm-sel4-gnueabi"
-        - "xargo build --target arm-sel4-gnueabihf"
+        - "xargo build --target i686-sel4-unknown --release"
+        - "xargo build --target arm-sel4-gnueabi --release"
+        - "xargo build --target arm-sel4-gnueabihf --release"
 verify_signatures:
     image: ubuntu:16.10
     script:
