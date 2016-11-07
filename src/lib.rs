@@ -19,7 +19,7 @@
 
 #![no_std]
 #![allow(stable_features, unused_features)]
-#![feature(no_std, core_slice_ext)]
+#![feature(no_std, core_slice_ext, const_fn)]
 #![doc(html_root_url = "https://doc.robigalia.org/")]
 
 extern crate sel4_sys;
@@ -31,13 +31,6 @@ pub type Result = core::result::Result<(), Error>;
 pub trait ToCap {
     /// Unwrap this object into its raw capability pointer.
     fn to_cap(&self) -> seL4_CPtr;
-}
-
-pub trait FromCap: Sized {
-    /// Wrap a capability pointer with this type.
-    ///
-    /// Does no checking that the capability is to an object of the correct type.
-    fn from_cap(cptr: seL4_CPtr) -> Self;
 }
 
 pub trait Allocatable {
@@ -53,13 +46,6 @@ impl ToCap for seL4_CPtr {
     #[inline(always)]
     fn to_cap(&self) -> seL4_CPtr {
         *self
-    }
-}
-
-impl FromCap for seL4_CPtr {
-    #[inline(always)]
-    fn from_cap(cptr: seL4_CPtr) -> Self {
-        cptr
     }
 }
 
@@ -92,9 +78,9 @@ macro_rules! cap_wrapper_inner {
                 self.cptr.to_cap()
             }
         }
-        impl ::FromCap for $name {
+        impl $name {
             #[inline(always)]
-            fn from_cap(cptr: ::sel4_sys::seL4_CPtr) -> Self {
+            pub const fn from_cap(cptr: ::sel4_sys::seL4_CPtr) -> Self {
                 $name { cptr: cptr }
             }
         }
