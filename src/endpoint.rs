@@ -151,7 +151,34 @@ impl Endpoint {
         Ok(())
     }
 
+    /// Raw send, using data already in the IPC buffer
+    #[inline(always)]
+    pub fn send(&self, data: seL4_Word, caps: seL4_Word) -> ::Result {
+        unsafe {
+            let buf = seL4_GetIPCBuffer();
+            seL4_Send(self.cptr, seL4_MessageInfo::new(0, 0, caps, data));
+            if (*buf).tag.get_label() != 0 {
+                return Err(::Error(::GoOn::CheckIPCBuf));
+            }
+        }
+        Ok(())
+    }
+
+    /// Raw non-blocking send, using data already in the IPC buffer
+    #[inline(always)]
+    pub fn try_send(&self, data: seL4_Word, caps: seL4_Word) -> ::Result {
+        unsafe {
+            let buf = seL4_GetIPCBuffer();
+            seL4_NBSend(self.cptr, seL4_MessageInfo::new(0, 0, caps, data));
+            if (*buf).tag.get_label() != 0 {
+                return Err(::Error(::GoOn::CheckIPCBuf));
+            }
+        }
+        Ok(())
+    }
+
     /// Try to send a message, returning no indication of failure if the message could not be sent.
+    #[inline(always)]
     pub fn try_send_message(&self, data: &[u32], caps: &[seL4_CPtr]) -> ::Result {
         if data.len() > seL4_MsgMaxLength {
             return Err(::Error(::GoOn::TooMuchData));
@@ -196,5 +223,19 @@ impl Endpoint {
         let mut sender = 0;
         let msginfo = unsafe { seL4_NBRecv(self.cptr, &mut sender) };
         RecvToken::from_raw(sender, msginfo)
+    }
+
+    /// Raw call, using data already in the IPC buffer
+    #[inline(always)]
+    pub fn call(&self, data: seL4_Word, caps: seL4_Word) -> Result<seL4_MessageInfo, ::Error> {
+        let msg = unsafe {
+            let buf = seL4_GetIPCBuffer();
+            let msg = seL4_Call(self.cptr, seL4_MessageInfo::new(0, 0, caps, data));
+            if (*buf).tag.get_label() != 0 {
+                return Err(::Error(::GoOn::CheckIPCBuf));
+            }
+            msg
+        };
+        Ok(msg)
     }
 }
