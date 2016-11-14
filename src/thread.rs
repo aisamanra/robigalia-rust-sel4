@@ -23,7 +23,7 @@ cap_wrapper!{
 /// structure.
 pub struct ThreadConfiguration {
     pub fault_handler: seL4_Word,
-    pub priority: u8,
+    pub priority: seL4_PrioProps,
     pub cspace_root: CNode,
     pub cspace_root_data: seL4_CapData,
     pub vspace_root: seL4_CPtr,
