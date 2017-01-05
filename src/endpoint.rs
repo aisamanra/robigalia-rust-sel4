@@ -124,7 +124,7 @@ impl Endpoint {
     ///
     /// This is `seL4_Send` in its full generality.
     #[inline(always)]
-    pub fn send_message(&self, data: &[u32], caps: &[seL4_CPtr]) -> ::Result {
+    pub fn send_message(&self, data: &[seL4_Word], caps: &[seL4_CPtr]) -> ::Result {
         if data.len() > seL4_MsgMaxLength {
             return Err(::Error(::GoOn::TooMuchData));
         }
@@ -179,7 +179,7 @@ impl Endpoint {
 
     /// Try to send a message, returning no indication of failure if the message could not be sent.
     #[inline(always)]
-    pub fn try_send_message(&self, data: &[u32], caps: &[seL4_CPtr]) -> ::Result {
+    pub fn try_send_message(&self, data: &[seL4_Word], caps: &[seL4_CPtr]) -> ::Result {
         if data.len() > seL4_MsgMaxLength {
             return Err(::Error(::GoOn::TooMuchData));
         }

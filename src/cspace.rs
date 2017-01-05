@@ -21,14 +21,14 @@ pub struct Badge {
 impl Badge {
     pub fn new(val: u32) -> Badge {
         let mut bits: seL4_CapData = unsafe { ::core::mem::zeroed() };
-        bits.set_Badge(val);
+        bits.set_Badge(val as seL4_Word);
         Badge {
             bits: bits
         }
     }
 
     pub fn get_value(&self) -> u32 {
-        self.bits.get_Badge()
+        self.bits.get_Badge() as u32
     }
 }
 
@@ -118,14 +118,13 @@ impl SlotRef {
                                     badge.bits));
     }
 
-    /// "Recycle" the capability in this slot.
+    /// When used on a badged endpoint cap, cancel any outstanding send operations for that
+    /// endpoint and badge.
     ///
-    /// It's not clear to me what this does, precisely, since I haven't consulted the spec or
-    /// thought much about it, but it's advertised as for "reusing an object within the same
-    /// protection domain".
+    /// This has no effect on other objects.
     #[inline(always)]
-    pub fn recycle(&self) -> ::Result {
-        errcheck!(seL4_CNode_Recycle(self.root.to_cap(), self.cptr, self.depth));
+    pub fn cancel_badged_sends(&self) -> ::Result {
+        errcheck!(seL4_CNode_CancelBadgedSends(self.root.to_cap(), self.cptr, self.depth));
     }
 
     /// Delete all child capabilities of the capability in this slot.
@@ -233,14 +232,14 @@ impl CNodeInfo {
             .wrapping_sub(self.prefix_bits as usize) as usize;
         let one = 1 as seL4_Word; // makes type inference work.
 
-        decoded.leftover = cptr & one.wrapping_shl(leftover_bits as seL4_Word).wrapping_sub(1);
-        cptr = cptr.wrapping_shr(leftover_bits as seL4_Word);
+        decoded.leftover = cptr & one.wrapping_shl(leftover_bits as u32).wrapping_sub(1);
+        cptr = cptr.wrapping_shr(leftover_bits as u32);
 
-        decoded.radix = cptr & one.wrapping_shl(self.radix_bits as seL4_Word).wrapping_sub(1);
-        cptr = cptr.wrapping_shr(self.radix_bits as seL4_Word);
+        decoded.radix = cptr & one.wrapping_shl(self.radix_bits as u32).wrapping_sub(1);
+        cptr = cptr.wrapping_shr(self.radix_bits as u32);
 
-        decoded.guard = cptr & one.wrapping_shl(self.guard_bits as seL4_Word).wrapping_sub(1);
-        cptr = cptr.wrapping_shr(self.guard_bits as seL4_Word);
+        decoded.guard = cptr & one.wrapping_shl(self.guard_bits as u32).wrapping_sub(1);
+        cptr = cptr.wrapping_shr(self.guard_bits as u32);
 
         decoded.prefix = cptr;
 
@@ -255,16 +254,16 @@ impl CNodeInfo {
             .wrapping_sub(self.prefix_bits as usize) as usize;
         let one = 1 as seL4_Word; // makes type inference work.
         let mut result = decoded.prefix &
-            (one.wrapping_shl(self.prefix_bits as seL4_Word).wrapping_sub(1) as seL4_Word);
-        result = result.wrapping_shl(self.guard_bits as seL4_Word);
+            (one.wrapping_shl(self.prefix_bits as u32).wrapping_sub(1));
+        result = result.wrapping_shl(self.guard_bits as u32);
         result |= decoded.guard & 
-            (one.wrapping_shl(self.guard_bits as seL4_Word).wrapping_sub(1) as seL4_Word);
-        result = result.wrapping_shl(self.radix_bits as seL4_Word);
+            (one.wrapping_shl(self.guard_bits as u32).wrapping_sub(1));
+        result = result.wrapping_shl(self.radix_bits as u32);
         result |= decoded.radix & 
-            (one.wrapping_shl(self.radix_bits as seL4_Word).wrapping_sub(1) as seL4_Word);
-        result = result.wrapping_shl(self.prefix_bits as seL4_Word);
+            (one.wrapping_shl(self.radix_bits as u32).wrapping_sub(1));
+        result = result.wrapping_shl(self.prefix_bits as u32);
         result |= decoded.leftover & 
-            (one.wrapping_shl(leftover_bits as seL4_Word).wrapping_sub(1) as seL4_Word);
+            (one.wrapping_shl(leftover_bits as u32).wrapping_sub(1));
         result
     }
 }

@@ -197,7 +197,7 @@ impl LookupFailureKind {
                           -> Option<LookupFailureKind> {
         use LookupFailureKind::*;
         let kind = (*ipcbuf).msg[type_idx];
-        if kind > seL4_GuardMismatch as u32 {
+        if kind > seL4_GuardMismatch as seL4_Word {
             panic!("Unknown lookup failure type");
         }
         let kind = ::core::mem::transmute::<_, seL4_LookupFailureType>(kind);

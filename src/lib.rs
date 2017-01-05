@@ -174,9 +174,13 @@ mod domain;
 mod irq;
 mod alloc;
 
-#[cfg(all(target_arch = "x86", target_pointer_width = "32"))]
+#[cfg(target_arch = "x86")]
 mod arch {
     include!("arch/x86.rs");
+}
+#[cfg(target_arch = "x86_64")]
+mod arch {
+    include!("arch/x86_64.rs");
 }
 #[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
 mod arch {

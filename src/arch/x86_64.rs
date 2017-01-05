@@ -20,17 +20,34 @@ cap_wrapper_inner!{
     #[doc = "Authority to map IO page tables into a device's address space"]
     :IOSpace
 }
+
 cap_wrapper!{
-    #[doc = "A page table for the IOMMU"]
-    :IOPageTable seL4_X86_IOPageTableObject |_| 1 << 10
-    #[doc = "A page of physical memory that can be mapped into a vspace"]
-    :Page seL4_X86_4K |_| 1 << 10
-    #[doc = "A 'large page' (4MiB) for use with PAE"]
-    :LargePage seL4_X86_LargePageObject |_| 1 << 22
+    #[doc = "A page directory pointer table, which holds page directories"]
+    :PDPT seL4_X86_PDPTObject |_| 1 << seL4_PDPTBits
+    #[doc = "A page map level 4, which holds PDPTs"]
+    :PML4 seL4_X64_PML4Object |_| 1 << seL4_PML4Bits
+    #[doc = "A huge (1G) page of physical memory that can be mapped into a vspace"]
+    :HugePage seL4_X86_4K |_| 1 << seL4_HugePageBits
+    #[doc = "A (4K) page of physical memory that can be mapped into a vspace"]
+    :Page seL4_X86_4K |_| 1 << seL4_PageBits
+    #[doc = "A large (2M) page of physical memory that can be mapped into a vspace"]
+    :LargePage seL4_X86_LargePageObject |_| 1 << seL4_LargePageBits
     #[doc = "A page table, which can have pages mapped into it"]
-    :PageTable seL4_X86_PageTableObject |_| 1 << 10
-    #[doc = "A page directory, which holds page tables and forms the root of the vspace"]
-    :PageDirectory seL4_X86_PageDirectoryObject |_| 1 << 10
+    :PageTable seL4_X86_PageTableObject |_| 1 << seL4_PageTableBits
+    #[doc = "A page directory, which holds page tables"]
+    :PageDirectory seL4_X86_PageDirectoryObject |_| 1 << seL4_PageDirBits
+    #[doc = "A page table for the IOMMU"]
+    :IOPageTable seL4_X86_IOPageTableObject |_| 1 << seL4_IOPageTableBits
+    #[doc = "A virtual CPU, for virtualization"]
+    :VCPU seL4_X86_VCPUObject |_| 1 << seL4_VCPUBits
+    #[doc = "Extended page table (virt) PML4"]
+    :EPTPML4 seL4_X86_EPTPML4Object |_| 1 << seL4_EPTPML4Bits
+    #[doc = "Extended page table (virt) PDPT"]
+    :EPTPDPT seL4_X86_EPTPDPTObject |_| 1 << seL4_EPTPDPTBits
+    #[doc = "Extended page table (virt) PageDirectory"]
+    :EPTPageDirectory seL4_X86_EPTPDObject |_| 1 << seL4_EPTPDBits
+    #[doc = "Extended page table (virt) PageTable"]
+    :EPTPageTable seL4_X86_EPTPTObject |_| 1 << seL4_EPTPTBits
 }
 
 impl ASIDControl {
@@ -101,7 +118,7 @@ impl IOPort {
     /// Write 32-bit `value` to the given port.
     #[inline(always)]
     pub fn write32(&self, port: u16, value: u32) -> ::Result {
-        errcheck!(seL4_X86_IOPort_Out32(self.cptr, port as seL4_Word, value));
+        errcheck!(seL4_X86_IOPort_Out32(self.cptr, port as seL4_Word, value as seL4_Word));
     }
 }
 
@@ -140,10 +157,8 @@ impl Page {
     }
 
     /// Get the physical address of the underlying frame.
-    ///
-    /// **!!NOTE!!**: This is not exposed by libsel4 and thus should be considered unstable.
     #[inline(always)]
-    pub fn __get_address(&self) -> Result<seL4_Word, ::Error> {
+    pub fn get_address(&self) -> Result<seL4_Word, ::Error> {
         let res = unsafe { seL4_X86_Page_GetAddress(self.cptr) };
         if res.error == 0 {
             Ok(res.paddr)
@@ -184,6 +199,31 @@ impl PageDirectory {
         } else {
             Err(::Error(::GoOn::CheckIPCBuf))
         }
+    }
+
+    /// Map this page directory into a PDPT
+    #[inline(always)]
+    pub fn map(&self, pdpt: PDPT, addr: seL4_Word, attr: seL4_X86_VMAttributes) -> ::Result {
+        errcheck!(seL4_X86_PageDirectory_Map(self.cptr, pdpt.to_cap(), addr, attr));
+    }
+
+    /// Unmap this page directory from the PDPT it is mapped into
+    pub fn unmap(&self) -> ::Result {
+        errcheck!(seL4_X86_PageDirectory_Unmap(self.cptr));
+    }
+}
+
+impl PDPT {
+    /// Map this PDPT into a PML4
+    #[inline(always)]
+    pub fn map(&self, pml4: PML4, addr: seL4_Word, attr: seL4_X86_VMAttributes) -> ::Result {
+        errcheck!(seL4_X86_PDPT_Map(self.cptr, pml4.to_cap(), addr, attr));
+    }
+
+    /// Unmap this PDPT from the PML4 it is mapped into
+    #[inline(always)]
+    pub fn unmap(&self) -> ::Result {
+        errcheck!(seL4_X86_PDPT_Unmap(self.cptr));
     }
 }
 
