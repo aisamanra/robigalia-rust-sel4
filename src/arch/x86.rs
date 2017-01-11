@@ -101,7 +101,7 @@ impl IOPort {
     /// Write 32-bit `value` to the given port.
     #[inline(always)]
     pub fn write32(&self, port: u16, value: u32) -> ::Result {
-        errcheck!(seL4_X86_IOPort_Out32(self.cptr, port as seL4_Word, value));
+        errcheck!(seL4_X86_IOPort_Out32(self.cptr, port as seL4_Word, value as seL4_Word));
     }
 }
 
