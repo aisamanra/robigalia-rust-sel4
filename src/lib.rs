@@ -99,10 +99,10 @@ macro_rules! errcheck {
 /// inspect the details of the error you must call `.details()`. The `Debug` implementation will do
 /// this automatically, to aid debugging.
 #[derive(Copy, Clone, PartialEq, Eq)]
-pub struct Error(GoOn);
+pub struct Error(pub GoOn);
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum GoOn {
+pub enum GoOn {
     CheckIPCBuf,
     TooMuchData,
     TooManyCaps, // WouldBlock,
