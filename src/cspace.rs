@@ -229,7 +229,7 @@ impl CNodeInfo {
             .wrapping_mul(8)
             .wrapping_sub(self.prefix_bits as usize)
             .wrapping_sub(self.guard_bits as usize)
-            .wrapping_sub(self.prefix_bits as usize) as usize;
+            .wrapping_sub(self.radix_bits as usize) as usize;
         let one = 1 as seL4_Word; // makes type inference work.
 
         decoded.leftover = cptr & one.wrapping_shl(leftover_bits as u32).wrapping_sub(1);
@@ -251,7 +251,7 @@ impl CNodeInfo {
             .wrapping_mul(8)
             .wrapping_sub(self.prefix_bits as usize)
             .wrapping_sub(self.guard_bits as usize)
-            .wrapping_sub(self.prefix_bits as usize) as usize;
+            .wrapping_sub(self.radix_bits as usize) as usize;
         let one = 1 as seL4_Word; // makes type inference work.
         let mut result = decoded.prefix &
             (one.wrapping_shl(self.prefix_bits as u32).wrapping_sub(1));
