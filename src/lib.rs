@@ -25,6 +25,9 @@
 extern crate sel4_sys;
 use sel4_sys::*;
 
+// TODO: This should be a configuration option pulled from sel4 kernel config
+pub const CONFIG_RETYPE_FAN_OUT_LIMIT: usize = 256;
+
 /// Canonical result type from invoking capabilities.
 pub type Result = core::result::Result<(), Error>;
 
@@ -53,10 +56,21 @@ macro_rules! cap_wrapper {
     ($($(#[$attr:meta])* : $name:ident $objtag:ident $size:expr)*) => ($(
         cap_wrapper_inner!($(#[$attr])* : $name);
         impl ::Allocatable for $name {
-            fn create(untyped_memory: ::sel4_sys::seL4_CPtr, dest: ::cspace::Window, size_bits: ::sel4_sys::seL4_Word) -> ::Result {
+            fn create(untyped_memory: ::sel4_sys::seL4_CPtr, mut dest: ::cspace::Window, size_bits: ::sel4_sys::seL4_Word) -> ::Result {
                 use ToCap;
-                errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as seL4_Word, size_bits, dest.cnode.root.to_cap(),
+                use CONFIG_RETYPE_FAN_OUT_LIMIT;;
+                // Most we can create in one syscall is CONFIG_RETYPE_FAN_OUT_LIMIT (256)
+                while dest.num_slots > CONFIG_RETYPE_FAN_OUT_LIMIT {
+                    errcheck_noreturn!(seL4_Untyped_Retype(untyped_memory, $objtag as seL4_Word, size_bits, dest.cnode.root.to_cap(),
+                                    dest.cnode.cptr as seL4_Word, dest.cnode.depth as seL4_Word, dest.first_slot_idx as seL4_Word, CONFIG_RETYPE_FAN_OUT_LIMIT as seL4_Word));
+                    dest.first_slot_idx += CONFIG_RETYPE_FAN_OUT_LIMIT;
+                    dest.num_slots -= CONFIG_RETYPE_FAN_OUT_LIMIT;
+                }
+                if dest.num_slots > 0 {
+                    errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as seL4_Word, size_bits, dest.cnode.root.to_cap(),
                                     dest.cnode.cptr as seL4_Word, dest.cnode.depth as seL4_Word, dest.first_slot_idx as seL4_Word, dest.num_slots as seL4_Word));
+                }
+                Ok(())
             }
 
             fn object_size(size_bits: seL4_Word) -> isize {
@@ -90,6 +104,12 @@ macro_rules! cap_wrapper_inner {
 macro_rules! errcheck {
     ($e:expr) => {
         if unsafe { $e } == 0 { return Ok(()) } else { return Err(::Error(::GoOn::CheckIPCBuf)) }
+    }
+}
+
+macro_rules! errcheck_noreturn {
+    ($e:expr) => {
+        if unsafe { $e } != 0 { return Err(::Error(::GoOn::CheckIPCBuf)); }
     }
 }
 
