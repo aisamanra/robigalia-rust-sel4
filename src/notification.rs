@@ -7,18 +7,20 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-use sel4_sys::*;
+use sel4_sys::{seL4_NBRecv, seL4_NotificationObject, seL4_Recv, seL4_Signal, seL4_Word};
 
-cap_wrapper!{
-    #[doc="A notification object for signalling"]
-    :Notification seL4_NotificationObject |_| 16
+cap_wrapper!{ ()
+    /// A notification object for signalling
+    Notification = seL4_NotificationObject |_| 16,
 }
 
 impl Notification {
     /// Signal the notification.
     #[inline(always)]
     pub fn signal(&self) {
-        unsafe { seL4_Signal(self.cptr) }
+        unsafe {
+            seL4_Signal(self.cptr)
+        }
     }
 
     /// Block waiting for the notification to be signaled.

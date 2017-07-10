@@ -8,28 +8,27 @@
 // according to those terms.
 
 use sel4_sys::*;
+
 use ToCap;
 
-cap_wrapper_inner!{
-    #[doc = "Authority to allocate ASID pools"] 
-    :ASIDControl
-    #[doc = "Authority to create page directories"]
-    :ASIDPool
-}
+cap_wrapper!{ ()
+    /// Authority to allocate ASID pools
+    ASIDControl,
+    /// Authority to create page directories
+    ASIDPool,
 
-cap_wrapper!{
-    #[doc = "A 4K page of physical memory mapped into a page table"]
-    :SmallPage seL4_ARM_SmallPageObject |_| 1 << 10
-    #[doc = "A 64K page of physical memory mapped into a page table"]
-    :LargePage seL4_ARM_LargePageObject |_| 1 << 16
-    #[doc = "A 1M page of physical memory mapped into a page directory"]
-    :Section seL4_ARM_SectionObject |_| 1 << 20
-    #[doc = "A 16M page of physical memory mapped into a page directory"]
-    :SuperSection seL4_ARM_SuperSectionObject |_| 1 << 24
-    #[doc = "A page table, which can have pages mapped into it"]
-    :PageTable seL4_ARM_PageTableObject |_| 1 << 10
-    #[doc = "A page directory, which holds page tables or sections and forms the root of the vspace"]
-    :PageDirectory seL4_ARM_PageDirectoryObject |_| 1 << 14
+    /// A 4K page of physical memory mapped into a page table
+    SmallPage = seL4_ARM_SmallPageObject |_| 1 << 10,
+    /// A 64K page of physical memory mapped into a page table
+    LargePage = seL4_ARM_LargePageObject |_| 1 << 16,
+    /// A 1M page of physical memory mapped into a page directory
+    Section = seL4_ARM_SectionObject |_| 1 << 20,
+    /// A 16M page of physical memory mapped into a page directory
+    SuperSection = seL4_ARM_SuperSectionObject |_| 1 << 24,
+    /// A page table, which can have pages mapped into it
+    PageTable = seL4_ARM_PageTableObject |_| 1 << 10,
+    /// A page directory, which holds page tables or sections and forms the root of the vspace
+    PageDirectory = seL4_ARM_PageDirectoryObject |_| 1 << 14,
 }
 
 impl ASIDControl {
@@ -39,7 +38,13 @@ impl ASIDControl {
     /// `untyped` must be 4KiB.
     #[inline(always)]
     pub fn make_pool(&self, untyped: SmallPage, dest: ::SlotRef) -> ::Result {
-        errcheck!(seL4_ARM_ASIDControl_MakePool(self.cptr, untyped.to_cap(), dest.root.to_cap(), dest.cptr, dest.depth));
+        unsafe_as_result!(seL4_ARM_ASIDControl_MakePool(
+            self.cptr,
+            untyped.to_cap(),
+            dest.root.to_cap(),
+            dest.cptr,
+            dest.depth,
+        ))
     }
 }
 
@@ -47,7 +52,7 @@ impl ASIDPool {
     /// Assign a page directory to this ASID pool.
     #[inline(always)]
     pub fn assign(&self, vroot: PageDirectory) -> ::Result {
-        errcheck!(seL4_ARM_ASIDPool_Assign(self.cptr, vroot.to_cap()));
+        unsafe_as_result!(seL4_ARM_ASIDPool_Assign(self.cptr, vroot.to_cap()))
     }
 }
 
@@ -56,20 +61,22 @@ macro_rules! page_impls {
 impl $name {
     /// Map this page into an address space.
     #[inline(always)]
-    pub fn map(&self, pd: PageDirectory, addr: seL4_Word, rights: seL4_CapRights, attr: seL4_ARM_VMAttributes) -> ::Result {
-        errcheck!(seL4_ARM_Page_Map(self.cptr, pd.to_cap(), addr, rights, attr));
+    pub fn map(&self, pd: PageDirectory, addr: seL4_Word, rights: seL4_CapRights,
+               attr: seL4_ARM_VMAttributes) -> ::Result {
+        unsafe_as_result!(seL4_ARM_Page_Map(self.cptr, pd.to_cap(), addr, rights, attr))
     }
 
     /// Remap this page, possibly changing rights or attribute but not address.
     #[inline(always)]
-    pub fn remap(&self, pd: PageDirectory, rights: seL4_CapRights, attr: seL4_ARM_VMAttributes) -> ::Result {
-        errcheck!(seL4_ARM_Page_Remap(self.cptr, pd.to_cap(), rights, attr));
+    pub fn remap(&self, pd: PageDirectory, rights: seL4_CapRights,
+                 attr: seL4_ARM_VMAttributes) -> ::Result {
+        unsafe_as_result!(seL4_ARM_Page_Remap(self.cptr, pd.to_cap(), rights, attr))
     }
 
     /// Unmap this page.
     #[inline(always)]
     pub fn unmap(&self) -> ::Result {
-        errcheck!(seL4_ARM_Page_Unmap(self.cptr));
+        unsafe_as_result!(seL4_ARM_Page_Unmap(self.cptr))
     }
 
     /// Get the physical address of the underlying frame.
@@ -96,12 +103,12 @@ impl PageTable {
     /// Map this page table into an address space.
     #[inline(always)]
     pub fn map(&self, pd: PageDirectory, addr: seL4_Word, attr: seL4_ARM_VMAttributes) -> ::Result {
-        errcheck!(seL4_ARM_PageTable_Map(self.cptr, pd.to_cap(), addr, attr));
+        unsafe_as_result!(seL4_ARM_PageTable_Map(self.cptr, pd.to_cap(), addr, attr))
     }
 
     /// Unmap this page.
     #[inline(always)]
     pub fn unmap(&self) -> ::Result {
-        errcheck!(seL4_ARM_PageTable_Unmap(self.cptr));
+        unsafe_as_result!(seL4_ARM_PageTable_Unmap(self.cptr))
     }
 }

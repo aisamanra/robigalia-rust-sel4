@@ -9,20 +9,28 @@
 
 //! IRQ management and handling.
 
-use sel4_sys::*;
+use sel4_sys::{seL4_IRQControl_Get, seL4_IRQHandler_Ack, seL4_IRQHandler_Clear,
+               seL4_IRQHandler_SetNotification};
+
 use ToCap;
 
-cap_wrapper_inner!{
-    #[doc = "Authority to create IRQHandler capabilities"]
-    :IRQControl
-    #[doc = "Authority to wait for and acknowledge IRQs"]
-    :IRQHandler
+cap_wrapper!{ ()
+    /// Authority to create IRQHandler capabilities
+    IRQControl,
+    /// Authority to wait for and acknowledge IRQs
+    IRQHandler,
 }
 
 impl IRQControl {
     /// Create an IRQ handler capability, storing it in `slot`.
     pub fn get(&self, irq: isize, slot: ::SlotRef) -> ::Result {
-        errcheck!(seL4_IRQControl_Get(self.cptr, irq, slot.root.to_cap(), slot.cptr, slot.depth));
+        unsafe_as_result!(seL4_IRQControl_Get(
+            self.cptr,
+            irq,
+            slot.root.to_cap(),
+            slot.cptr,
+            slot.depth,
+        ))
     }
 }
 
@@ -32,18 +40,18 @@ impl IRQHandler {
     /// If you don't ack interrupts, you'll never get them again.
     #[inline(always)]
     pub fn acknowledge(&self) -> ::Result {
-        errcheck!(seL4_IRQHandler_Ack(self.cptr));
+        unsafe_as_result!(seL4_IRQHandler_Ack(self.cptr))
     }
 
     /// Set the notification object to notify when an interrupt is received.
     #[inline(always)]
     pub fn set_notification(&self, notification: ::Notification) -> ::Result {
-        errcheck!(seL4_IRQHandler_SetNotification(self.cptr, notification.to_cap()));
+        unsafe_as_result!(seL4_IRQHandler_SetNotification(self.cptr, notification.to_cap()))
     }
 
     /// Clear the notification object from this IRQ handler.
     #[inline(always)]
     pub fn clear_notification(&self) -> ::Result {
-        errcheck!(seL4_IRQHandler_Clear(self.cptr));
+        unsafe_as_result!(seL4_IRQHandler_Clear(self.cptr))
     }
 }

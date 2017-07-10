@@ -38,55 +38,43 @@ pub enum ErrorDetails {
         bytes_available: seL4_Word,
     },
     TooMuchData,
-    TooManyCaps, // WouldBlock,
+    TooManyCaps,
+//  WouldBlock,
 }
 
 impl ::core::fmt::Display for ErrorDetails {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use self::ErrorDetails::*;
+
         match *self {
-            InvalidArgument { which } => write!(f, "argument {} was invalid", which),
-            InvalidCapability { which } => write!(f, "capability {} was invalid", which),
-            IllegalOperation => write!(f, "the operation was not permitted"),
-            RangeError { min, max } => {
-                write!(f, "value was out of range (min = {}, max = {})", min, max)
-            }
-            AlignmentError => write!(f, "value was not aligned"),
-            FailedLookup { failed_for_source, lookup_kind } => {
-                write!(f,
-                       "looking up {}capability failed: {}",
-                       if failed_for_source {
-                           "source "
-                       } else {
-                           ""
-                       },
-                       lookup_kind)
-            }
-            TruncatedMessage => {
-                write!(f,
-                       "not enough arguments were provided (this indicates a bug in rust-sel4)")
-            }
-            DeleteFirst => {
-                write!(f,
-                       "a capability should have been deleted before attempting the operation")
-            }
-            RevokeFirst => {
-                write!(f,
-                       "a capability should have been revoked before attempting the operation")
-            }
-            NotEnoughMemory { bytes_available } => {
-                write!(f,
-                       "there were {} bytes available, which was not enough to allocate the object",
-                       bytes_available)
-            }
-            TooMuchData => write!(f, "tried to send more data than can fit in the IPC buffer"),
-            TooManyCaps => {
-                write!(f,
-                       "tried to send more capabilities than can fit in the IPC buffer")
-            }
-            // WouldBlock => {
-            //    write!(f, "tried to perform an operation on an endpoint that would have blocked")
-            // }
+            InvalidArgument { which } =>
+                write!(f, "argument {} was invalid", which),
+            InvalidCapability { which } =>
+                write!(f, "capability {} was invalid", which),
+            IllegalOperation =>
+                write!(f, "the operation was not permitted"),
+            RangeError { min, max } =>
+                write!(f, "value was out of range (min = {}, max = {})", min, max),
+            AlignmentError =>
+                write!(f, "value was not aligned"),
+            FailedLookup { failed_for_source, lookup_kind } =>
+                write!(f, "looking up {}capability failed: {}",
+                       if failed_for_source { "source " } else { "" }, lookup_kind),
+            TruncatedMessage =>
+                write!(f, "not enough arguments were provided (this indicates a bug in rust-sel4)"),
+            DeleteFirst =>
+                write!(f, "a capability should have been deleted before attempting the operation"),
+            RevokeFirst =>
+                write!(f, "a capability should have been revoked before attempting the operation"),
+            NotEnoughMemory { bytes_available } =>
+                write!(f, "there were {} bytes available, which was not enough to allocate the\
+                           object", bytes_available),
+            TooMuchData =>
+                write!(f, "tried to send more data than can fit in the IPC buffer"),
+            TooManyCaps =>
+                write!(f, "tried to send more capabilities than can fit in the IPC buffer")
+//          WouldBlock =>
+//             write!(f, "tried to perform an operation on an endpoint that would have blocked"),
         }
     }
 }
@@ -95,44 +83,48 @@ impl Error {
     #[inline]
     pub fn details(&self) -> Option<ErrorDetails> {
         use self::ErrorDetails::*;
+
         match self.0 {
             GoOn::TooMuchData => Some(TooMuchData),
             GoOn::TooManyCaps => Some(TooManyCaps),
-            // GoOn::WouldBlock => Some(WouldBlock),
-            GoOn::CheckIPCBuf => unsafe {
-                let ipcbuf = seL4_GetIPCBuffer();
-                let label = (*ipcbuf).tag.get_label();
-                if label > seL4_NotEnoughMemory as seL4_Word {
-                    panic!("Unknown error type");
+//          GoOn::WouldBlock => Some(WouldBlock),
+            GoOn::CheckIPCBuf => {
+                unsafe {
+                    let ipcbuf = seL4_GetIPCBuffer();
+                    let label = (*ipcbuf).tag.get_label();
+                    assert!(label > seL4_NotEnoughMemory as seL4_Word, "Unknown error type");
+
+                    // unsafe: transmute could be replaced with an enum_from_primitive!()
+                    match ::core::mem::transmute::<_, seL4_Error>(label) {
+                         seL4_NoError => None,
+                         seL4_InvalidArgument => Some(InvalidArgument { which: (*ipcbuf).msg[0] }),
+                         seL4_InvalidCapability => Some(InvalidCapability { which: (*ipcbuf).msg[0] }),
+                         seL4_IllegalOperation => Some(IllegalOperation),
+                         seL4_RangeError => {
+                             Some(RangeError {
+                                 min: (*ipcbuf).msg[0],
+                                 max: (*ipcbuf).msg[1],
+                             })
+                         }
+                         seL4_AlignmentError => Some(AlignmentError),
+                         seL4_FailedLookup => {
+                             Some(FailedLookup {
+                                 failed_for_source: (*ipcbuf).msg[0] == 1,
+                                 lookup_kind: match LookupFailureKind::from_ipcbuf(ipcbuf, 1, 2) {
+                                     Some(s) => s,
+                                     None => return None,
+                                 },
+                             })
+                         }
+                         seL4_TruncatedMessage => Some(TruncatedMessage),
+                         seL4_DeleteFirst => Some(DeleteFirst),
+                         seL4_RevokeFirst => Some(RevokeFirst),
+                         seL4_NotEnoughMemory => {
+                             Some(NotEnoughMemory { bytes_available: (*ipcbuf).msg[0] })
+                         }
+                     }
                 }
-                let label = ::core::mem::transmute::<_, seL4_Error>(label);
-                Some(match label {
-                    seL4_NoError => return None,
-                    seL4_InvalidArgument => InvalidArgument { which: (*ipcbuf).msg[0] },
-                    seL4_InvalidCapability => InvalidCapability { which: (*ipcbuf).msg[0] },
-                    seL4_IllegalOperation => IllegalOperation,
-                    seL4_RangeError => {
-                        RangeError {
-                            min: (*ipcbuf).msg[0],
-                            max: (*ipcbuf).msg[1],
-                        }
-                    }
-                    seL4_AlignmentError => AlignmentError,
-                    seL4_FailedLookup => {
-                        FailedLookup {
-                            failed_for_source: (*ipcbuf).msg[0] == 1,
-                            lookup_kind: match LookupFailureKind::from_ipcbuf(ipcbuf, 1, 2) {
-                                Some(s) => s,
-                                None => return None,
-                            },
-                        }
-                    }
-                    seL4_TruncatedMessage => TruncatedMessage,
-                    seL4_DeleteFirst => DeleteFirst,
-                    seL4_RevokeFirst => RevokeFirst,
-                    seL4_NotEnoughMemory => NotEnoughMemory { bytes_available: (*ipcbuf).msg[0] },
-                })
-            },
+            }
         }
     }
 }
@@ -158,68 +150,58 @@ pub enum LookupFailureKind {
 impl ::core::fmt::Display for LookupFailureKind {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use LookupFailureKind::*;
+
         match *self {
-            InvalidRoot => {
-                write!(f,
-                       "root of the address space was not valid (wrong type, not writeable if the \
-                        destination, or not readable if the source)")
-            }
-            MissingCapability { bits_remaining } => {
-                write!(f,
-                       "there were {} bits remaining to be resolved, but the slot at that point \
-                        was empty",
-                       bits_remaining)
-            }
-            DepthMismatch { bits_remaining, bits_resolved } => {
-                write!(f,
-                       "after resolving {} bits with {} bits left to resolve, there was no slot \
-                        at that depth, or a page cap was found at the wrong depth",
-                       bits_resolved,
-                       bits_remaining)
-            }
-            GuardMismatch { bits_remaining, guard, guard_size } => {
-                write!(f,
-                       "with {} bits left to resolve, there was a guard {:x} (with {} bits) which \
-                        did not match",
-                       bits_remaining,
-                       guard,
-                       guard_size)
-            }
+            InvalidRoot =>
+                write!(f, "root of the address space was not valid (wrong type, not writeable if\
+                           the destination, or not readable if the source)"),
+            MissingCapability { bits_remaining } =>
+                write!(f, "there were {} bits remaining to be resolved, but the slot at that point\
+                           was empty",
+                       bits_remaining),
+            DepthMismatch { bits_remaining, bits_resolved } =>
+                write!(f, "after resolving {} bits with {} bits left to resolve, there was no slot\
+                           at that depth, or a page cap was found at the wrong depth",
+                       bits_resolved, bits_remaining),
+            GuardMismatch { bits_remaining, guard, guard_size } =>
+                write!(f, "with {} bits left to resolve, there was a guard {:x} (with {} bits)\
+                           which did not match",
+                       bits_remaining, guard, guard_size),
         }
     }
 }
 
 impl LookupFailureKind {
     #[inline(always)]
-    unsafe fn from_ipcbuf(ipcbuf: *mut seL4_IPCBuffer,
-                          type_idx: usize,
-                          details_idx: usize)
+    unsafe fn from_ipcbuf(ipcbuf: *mut seL4_IPCBuffer, type_idx: usize, details_idx: usize)
                           -> Option<LookupFailureKind> {
         use LookupFailureKind::*;
+
         let kind = (*ipcbuf).msg[type_idx];
-        if kind > seL4_GuardMismatch as seL4_Word {
-            panic!("Unknown lookup failure type");
-        }
-        let kind = ::core::mem::transmute::<_, seL4_LookupFailureType>(kind);
-        Some(match kind {
-            seL4_NoFailure => return None,
-            seL4_InvalidRoot => InvalidRoot,
-            seL4_MissingCapability => {
-                MissingCapability { bits_remaining: (*ipcbuf).msg[details_idx] }
-            }
-            seL4_DepthMismatch => {
-                DepthMismatch {
-                    bits_remaining: (*ipcbuf).msg[details_idx],
-                    bits_resolved: (*ipcbuf).msg[details_idx + 1],
-                }
-            }
-            seL4_GuardMismatch => {
-                GuardMismatch {
-                    bits_remaining: (*ipcbuf).msg[details_idx],
-                    guard: (*ipcbuf).msg[details_idx + 1],
-                    guard_size: (*ipcbuf).msg[details_idx + 2],
-                }
-            }
-        })
+        assert!(kind > seL4_GuardMismatch as seL4_Word, "Unknown lookup failure type");
+
+        // unsafe: transmute could be replaced with an enum_from_primitive!()
+        match ::core::mem::transmute::<_, seL4_LookupFailureType>(kind) {
+             seL4_NoFailure => None,
+             seL4_InvalidRoot => Some(InvalidRoot),
+             seL4_MissingCapability => {
+                 Some(MissingCapability {
+                     bits_remaining: (*ipcbuf).msg[details_idx],
+                 })
+             }
+             seL4_DepthMismatch => {
+                 Some(DepthMismatch {
+                     bits_remaining: (*ipcbuf).msg[details_idx],
+                     bits_resolved: (*ipcbuf).msg[details_idx + 1],
+                 })
+             }
+             seL4_GuardMismatch => {
+                 Some(GuardMismatch {
+                     bits_remaining: (*ipcbuf).msg[details_idx],
+                     guard: (*ipcbuf).msg[details_idx + 1],
+                     guard_size: (*ipcbuf).msg[details_idx + 2],
+                 })
+             }
+         }
     }
 }

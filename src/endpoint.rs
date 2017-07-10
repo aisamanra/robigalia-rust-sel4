@@ -32,9 +32,9 @@
 
 use sel4_sys::*;
 
-cap_wrapper!{
-    #[doc="An endpoint for message passing"]
-    :Endpoint seL4_EndpointObject |_| 16
+cap_wrapper!{ ()
+    /// An endpoint for message passing
+    Endpoint = seL4_EndpointObject |_| 16,
 }
 
 /// The result of a successful receive.
@@ -64,13 +64,16 @@ impl RecvToken {
     ///
     /// Returns `Err` if the slice is not at least length `caps_unwrapped`.
     pub fn get_unwrapped_caps(&self, caps: &mut [seL4_Word]) -> Result<(), ()> {
-        if caps.len() < seL4_MsgMaxExtraCaps && (caps.len() as seL4_Word) < self.caps_unwrapped {
+        if caps.len() < seL4_MsgMaxExtraCaps && caps.len() < self.caps_unwrapped {
             return Err(());
         }
 
         unsafe {
-            ::core::intrinsics::copy_nonoverlapping(&(*seL4_GetIPCBuffer()).caps_or_badges as *const seL4_Word,
-                                             caps.as_mut_ptr(), self.caps_unwrapped as usize)
+            ::core::intrinsics::copy_nonoverlapping(
+                &(*seL4_GetIPCBuffer()).caps_or_badges as *const seL4_Word,
+                caps.as_mut_ptr(),
+                self.caps_unwrapped as usize,
+            )
         }
 
         Ok(())
@@ -80,14 +83,15 @@ impl RecvToken {
     ///
     /// Returns `Err` if the slice is not at least length `words_transferred`.
     pub fn get_data(&self, data: &mut [seL4_Word]) -> Result<(), ()> {
-        if data.len() < seL4_MsgMaxLength && (data.len() as seL4_Word) < self.len {
+        if data.len() < seL4_MsgMaxLength && data.len() < self.len {
             return Err(());
         }
 
         unsafe {
-            ::core::intrinsics::copy_nonoverlapping(&(*seL4_GetIPCBuffer()).msg as *const seL4_Word,
-                                                    data.as_mut_ptr(),
-                                                    self.len as usize)
+            ::core::intrinsics::copy_nonoverlapping(
+                &(*seL4_GetIPCBuffer()).msg as *const seL4_Word, data.as_mut_ptr(),
+                self.len as usize,
+            )
         }
 
         Ok(())
@@ -133,22 +137,19 @@ impl Endpoint {
         }
         unsafe {
             let buf = seL4_GetIPCBuffer();
-            ::core::ptr::copy_nonoverlapping(data.as_ptr(),
-                                             (&mut (*buf).msg).as_mut_ptr(),
-                                             data.len());
-            ::core::ptr::copy_nonoverlapping(caps.as_ptr(),
-                                             (&mut (*buf).caps_or_badges).as_mut_ptr(),
-                                             caps.len());
-            seL4_Send(self.cptr,
-                      seL4_MessageInfo::new(0,
-                                            0,
-                                            caps.len() as seL4_Word,
-                                            data.len() as seL4_Word));
-            if (*buf).tag.get_label() != 0 {
-                return Err(::Error(::GoOn::CheckIPCBuf));
-            }
+            ::core::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                (&mut (*buf).msg).as_mut_ptr(),
+                data.len(),
+            );
+            ::core::ptr::copy_nonoverlapping(
+                caps.as_ptr(),
+                (&mut (*buf).caps_or_badges).as_mut_ptr(),
+                caps.len()
+            );
+            seL4_Send(self.cptr, seL4_MessageInfo::new(0, 0, caps.len(), data.len()));
+            unsafe_as_result!(@ (*buf).tag.get_label())
         }
-        Ok(())
     }
 
     /// Raw send, using data already in the IPC buffer
@@ -157,11 +158,8 @@ impl Endpoint {
         unsafe {
             let buf = seL4_GetIPCBuffer();
             seL4_Send(self.cptr, seL4_MessageInfo::new(0, 0, caps, data));
-            if (*buf).tag.get_label() != 0 {
-                return Err(::Error(::GoOn::CheckIPCBuf));
-            }
+            unsafe_as_result!(@ (*buf).tag.get_label())
         }
-        Ok(())
     }
 
     /// Raw non-blocking send, using data already in the IPC buffer
@@ -170,11 +168,8 @@ impl Endpoint {
         unsafe {
             let buf = seL4_GetIPCBuffer();
             seL4_NBSend(self.cptr, seL4_MessageInfo::new(0, 0, caps, data));
-            if (*buf).tag.get_label() != 0 {
-                return Err(::Error(::GoOn::CheckIPCBuf));
-            }
+            unsafe_as_result!(@ (*buf).tag.get_label())
         }
-        Ok(())
     }
 
     /// Try to send a message, returning no indication of failure if the message could not be sent.
@@ -188,22 +183,19 @@ impl Endpoint {
         }
         unsafe {
             let buf = seL4_GetIPCBuffer();
-            ::core::ptr::copy_nonoverlapping(data.as_ptr(),
-                                             (&mut (*buf).msg).as_mut_ptr(),
-                                             data.len());
-            ::core::ptr::copy_nonoverlapping(caps.as_ptr(),
-                                             (&mut (*buf).caps_or_badges).as_mut_ptr(),
-                                             caps.len());
-            seL4_NBSend(self.cptr,
-                        seL4_MessageInfo::new(0,
-                                              0,
-                                              caps.len() as seL4_Word,
-                                              data.len() as seL4_Word));
-            if (*buf).tag.get_label() != 0 {
-                return Err(::Error(::GoOn::CheckIPCBuf));
-            }
+            ::core::ptr::copy_nonoverlapping(
+                data.as_ptr(),
+                (&mut (*buf).msg).as_mut_ptr(),
+                data.len(),
+            );
+            ::core::ptr::copy_nonoverlapping(
+                caps.as_ptr(),
+                (&mut (*buf).caps_or_badges).as_mut_ptr(),
+                caps.len(),
+            );
+            seL4_NBSend(self.cptr, seL4_MessageInfo::new(0, 0, caps.len(), data.len()));
+            unsafe_as_result!(@ (*buf).tag.get_label())
         }
-        Ok(())
     }
 
     /// Block until a message is received.
@@ -228,14 +220,10 @@ impl Endpoint {
     /// Raw call, using data already in the IPC buffer
     #[inline(always)]
     pub fn call(&self, data: seL4_Word, caps: seL4_Word) -> Result<seL4_MessageInfo, ::Error> {
-        let msg = unsafe {
+        unsafe {
             let buf = seL4_GetIPCBuffer();
             let msg = seL4_Call(self.cptr, seL4_MessageInfo::new(0, 0, caps, data));
-            if (*buf).tag.get_label() != 0 {
-                return Err(::Error(::GoOn::CheckIPCBuf));
-            }
-            msg
-        };
-        Ok(msg)
+            unsafe_as_result!(@ (*buf).tag.get_label()).map(|()| msg)
+        }
     }
 }

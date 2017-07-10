@@ -9,8 +9,17 @@
 
 //! Dealing with CNodes
 
-use sel4_sys::*;
+use sel4_sys::{seL4_CNode_CancelBadgedSends, seL4_CNode_Copy, seL4_CNode_Delete, seL4_CNode_Mint,
+               seL4_CNode_Move, seL4_CNode_Mutate, seL4_CNode_Revoke, seL4_CNode_Rotate,
+               seL4_CNode_SaveCaller, seL4_CPtr, seL4_CapData, seL4_CapRights,
+               seL4_CapTableObject, seL4_Word};
+
 use ToCap;
+
+cap_wrapper!{ ()
+    /// Fixed-length table for storing capabilities
+    CNode = seL4_CapTableObject |i| 16 * i,
+}
 
 /// An unforgeable marker on a capability.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -20,11 +29,10 @@ pub struct Badge {
 
 impl Badge {
     pub fn new(val: u32) -> Badge {
+        // unsafe: mem: maybe use a Default::default() ?
         let mut bits: seL4_CapData = unsafe { ::core::mem::zeroed() };
         bits.set_Badge(val as seL4_Word);
-        Badge {
-            bits: bits
-        }
+        Badge { bits: bits }
     }
 
     pub fn get_value(&self) -> u32 {
@@ -65,32 +73,36 @@ impl SlotRef {
     /// Copy the capability in this slot into `dest`, inheriting `rights`.
     #[inline(always)]
     pub fn copy(&self, dest: SlotRef, rights: seL4_CapRights) -> ::Result {
-        errcheck!(seL4_CNode_Copy(dest.root.to_cap(),
-                                  dest.cptr,
-                                  dest.depth,
-                                  self.root.to_cap(),
-                                  self.cptr,
-                                  self.depth,
-                                  rights))
+        unsafe_as_result!(seL4_CNode_Copy(
+            dest.root.to_cap(),
+            dest.cptr,
+            dest.depth,
+            self.root.to_cap(),
+            self.cptr,
+            self.depth,
+            rights,
+        ))
     }
 
     /// Remove the capability in this slot, replacing it with the null capability.
     #[inline(always)]
     pub fn delete(&self) -> ::Result {
-        errcheck!(seL4_CNode_Delete(self.root.to_cap(), self.cptr, self.depth));
+        unsafe_as_result!(seL4_CNode_Delete(self.root.to_cap(), self.cptr, self.depth))
     }
 
     /// Copy the capability in this slot into `dest`, inheriting `rights` and applying `badge`.
     #[inline(always)]
     pub fn mint(&self, dest: SlotRef, rights: seL4_CapRights, badge: Badge) -> ::Result {
-        errcheck!(seL4_CNode_Mint(dest.root.to_cap(),
-                                  dest.cptr,
-                                  dest.depth,
-                                  self.root.to_cap(),
-                                  self.cptr,
-                                  self.depth,
-                                  rights,
-                                  badge.bits));
+        unsafe_as_result!(seL4_CNode_Mint(
+            dest.root.to_cap(),
+            dest.cptr,
+            dest.depth,
+            self.root.to_cap(),
+            self.cptr,
+            self.depth,
+            rights,
+            badge.bits,
+        ))
     }
 
     /// Move the capability in this slot into `dest`, clearing this slot.
@@ -98,24 +110,28 @@ impl SlotRef {
     /// Note: This is called `move_` because `move` is a keyword in Rust.
     #[inline(always)]
     pub fn move_(&self, dest: SlotRef) -> ::Result {
-        errcheck!(seL4_CNode_Move(dest.root.to_cap(),
-                                  dest.cptr,
-                                  dest.depth,
-                                  self.root.to_cap(),
-                                  self.cptr,
-                                  self.depth));
+        unsafe_as_result!(seL4_CNode_Move(
+            dest.root.to_cap(),
+            dest.cptr,
+            dest.depth,
+            self.root.to_cap(),
+            self.cptr,
+            self.depth,
+        ))
     }
 
     /// Move the capability in this slot into `dest`, applying `badge` and clearing this slot.
     #[inline(always)]
     pub fn mutate(&self, dest: SlotRef, badge: Badge) -> ::Result {
-        errcheck!(seL4_CNode_Mutate(dest.root.to_cap(),
-                                    dest.cptr,
-                                    dest.depth,
-                                    self.root.to_cap(),
-                                    self.cptr,
-                                    self.depth,
-                                    badge.bits));
+        unsafe_as_result!(seL4_CNode_Mutate(
+            dest.root.to_cap(),
+            dest.cptr,
+            dest.depth,
+            self.root.to_cap(),
+            self.cptr,
+            self.depth,
+            badge.bits,
+        ))
     }
 
     /// When used on a badged endpoint cap, cancel any outstanding send operations for that
@@ -124,7 +140,7 @@ impl SlotRef {
     /// This has no effect on other objects.
     #[inline(always)]
     pub fn cancel_badged_sends(&self) -> ::Result {
-        errcheck!(seL4_CNode_CancelBadgedSends(self.root.to_cap(), self.cptr, self.depth));
+        unsafe_as_result!(seL4_CNode_CancelBadgedSends(self.root.to_cap(), self.cptr, self.depth))
     }
 
     /// Delete all child capabilities of the capability in this slot.
@@ -133,11 +149,12 @@ impl SlotRef {
     ///
     /// - If the last cap to the TCB for the currently running thread is deleted, the thread will
     /// be destroyed at that point and further child capabilities will not be deleted
+    ///
     /// - If the last cap to the memory storing this CNode is deleted, something bad happens and
     /// the revoke will stop.
     #[inline(always)]
     pub fn revoke(&self) -> ::Result {
-        errcheck!(seL4_CNode_Revoke(self.root.to_cap(), self.cptr, self.depth));
+        unsafe_as_result!(seL4_CNode_Revoke(self.root.to_cap(), self.cptr, self.depth))
     }
 
     /// Atomically "rotate" the capability in `second` into `destination` applying
@@ -146,31 +163,28 @@ impl SlotRef {
     /// This is an associated function instead of a method because it's not really clear which slot
     /// deserves to be the receiver.
     #[inline(always)]
-    pub fn rotate(destination: SlotRef,
-                  destination_badge: Badge,
-                  pivot: SlotRef,
-                  pivot_badge: Badge,
-                  src: SlotRef)
+    pub fn rotate(dest: SlotRef, dest_badge: Badge, pivot: SlotRef,
+                  pivot_badge: Badge, src: SlotRef)
                   -> ::Result {
-        let dest = destination;
-        let dest_badge = destination_badge;
-        errcheck!(seL4_CNode_Rotate(dest.root.to_cap(),
-                                    dest.cptr,
-                                    dest.depth,
-                                    dest_badge.bits,
-                                    pivot.root.to_cap(),
-                                    pivot.cptr,
-                                    pivot.depth,
-                                    pivot_badge.bits,
-                                    src.root.to_cap(),
-                                    src.cptr,
-                                    src.depth));
+        unsafe_as_result!(seL4_CNode_Rotate(
+            dest.root.to_cap(),
+            dest.cptr,
+            dest.depth,
+            dest_badge.bits,
+            pivot.root.to_cap(),
+            pivot.cptr,
+            pivot.depth,
+            pivot_badge.bits,
+            src.root.to_cap(),
+            src.cptr,
+            src.depth,
+        ))
     }
 
     /// Save the reply capability into this slot.
     #[inline(always)]
     pub fn save_caller(&self) -> ::Result {
-        errcheck!(seL4_CNode_SaveCaller(self.root.to_cap(), self.cptr, self.depth));
+        unsafe_as_result!(seL4_CNode_SaveCaller(self.root.to_cap(), self.cptr, self.depth))
     }
 }
 
@@ -222,7 +236,7 @@ impl CNodeInfo {
             prefix: 0,
             guard: 0,
             radix: 0,
-            leftover: 0
+            leftover: 0,
         };
 
         let leftover_bits = ::core::mem::size_of::<seL4_Word>()
@@ -230,7 +244,7 @@ impl CNodeInfo {
             .wrapping_sub(self.prefix_bits as usize)
             .wrapping_sub(self.guard_bits as usize)
             .wrapping_sub(self.radix_bits as usize) as usize;
-        let one = 1 as seL4_Word; // makes type inference work.
+        let one: seL4_Word = 1;
 
         decoded.leftover = cptr & one.wrapping_shl(leftover_bits as u32).wrapping_sub(1);
         cptr = cptr.wrapping_shr(leftover_bits as u32);
@@ -252,18 +266,15 @@ impl CNodeInfo {
             .wrapping_sub(self.prefix_bits as usize)
             .wrapping_sub(self.guard_bits as usize)
             .wrapping_sub(self.radix_bits as usize) as usize;
-        let one = 1 as seL4_Word; // makes type inference work.
+        let one: seL4_Word = 1;
         let mut result = decoded.prefix &
             (one.wrapping_shl(self.prefix_bits as u32).wrapping_sub(1));
         result = result.wrapping_shl(self.guard_bits as u32);
-        result |= decoded.guard & 
-            (one.wrapping_shl(self.guard_bits as u32).wrapping_sub(1));
+        result |= decoded.guard & (one.wrapping_shl(self.guard_bits as u32).wrapping_sub(1));
         result = result.wrapping_shl(self.radix_bits as u32);
-        result |= decoded.radix & 
-            (one.wrapping_shl(self.radix_bits as u32).wrapping_sub(1));
+        result |= decoded.radix & (one.wrapping_shl(self.radix_bits as u32).wrapping_sub(1));
         result = result.wrapping_shl(self.prefix_bits as u32);
-        result |= decoded.leftover & 
-            (one.wrapping_shl(leftover_bits as u32).wrapping_sub(1));
+        result |= decoded.leftover & (one.wrapping_shl(leftover_bits as u32).wrapping_sub(1));
         result
     }
 }
@@ -291,7 +302,7 @@ impl Window {
         let raw = DecodedCPtr {
             prefix: self.cnode.cptr,
             guard: info.guard_val,
-            radix: self.first_slot_idx.wrapping_add(i) as seL4_Word,
+            radix: self.first_slot_idx.wrapping_add(i),
             leftover: 0,
         };
 
@@ -299,22 +310,14 @@ impl Window {
     }
 
     pub fn slotref_to(&self, info: &CNodeInfo, i: usize) -> Option<SlotRef> {
-        match self.cptr_to(info, i) {
-            Some(cptr) => {
-                Some(SlotRef {
-                    root: self.cnode.root,
-                    cptr: cptr,
-                    depth: info.radix_bits
-                        .wrapping_add(info.guard_bits)
-                        .wrapping_add(info.prefix_bits)
-                })
-            },
-            None => None
-        }
+        self.cptr_to(info, i).map(|cptr| {
+            SlotRef {
+                 root: self.cnode.root,
+                 cptr: cptr,
+                 depth: info.radix_bits
+                     .wrapping_add(info.guard_bits)
+                     .wrapping_add(info.prefix_bits),
+            }
+        })
     }
-}
-
-cap_wrapper!{
-    #[doc = "Fixed-length table for storing capabilities"]
-    :CNode seL4_CapTableObject |i| 16*i
 }

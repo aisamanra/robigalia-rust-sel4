@@ -7,14 +7,26 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
+use sel4_sys::{seL4_CPtr, seL4_CapData, seL4_DomainSet_Set, seL4_PrioProps, seL4_TCBObject,
+               seL4_TCB_BindNotification, seL4_TCB_Configure, seL4_TCB_CopyRegisters,
+               seL4_TCB_ReadRegisters, seL4_TCB_Resume, seL4_TCB_SetIPCBuffer,
+               seL4_TCB_SetPriority, seL4_TCB_SetSpace, seL4_TCB_Suspend,
+               seL4_TCB_UnbindNotification, seL4_TCB_WriteRegisters, seL4_UserContext, seL4_Word};
 
-use sel4_sys::*;
+use {CNode, Notification, ToCap};
 
-use {ToCap, Notification, CNode};
-
-cap_wrapper!{
-    #[doc="A thread control block"]
-    :Thread seL4_TCBObject |_| if cfg!(target_arch = "arm") { 512 } else if cfg!(target_arch = "x86") { 1024 } else { unimplemented!() }
+cap_wrapper!{ ()
+    /// A thread control block
+    Thread = seL4_TCBObject |_|
+        if cfg!(target_arch = "arm") {
+            512
+        } else if cfg!(target_arch = "x86") {
+            1024
+        } else if cfg!(target_arch = "x86_64") {
+            2048
+        } else {
+            unimplemented!()
+        },
 }
 
 /// Thread configuration.
@@ -36,27 +48,29 @@ impl Thread {
     /// Bind a notification object to this thread.
     #[inline(always)]
     pub fn bind_notification(&self, notification: Notification) -> ::Result {
-        errcheck!(seL4_TCB_BindNotification(self.cptr, notification.to_cap()));
+        unsafe_as_result!(seL4_TCB_BindNotification(self.cptr, notification.to_cap()))
     }
 
     /// Unbind any notification object from this thread.
     #[inline(always)]
     pub fn unbind_notification(&self) -> ::Result {
-        errcheck!(seL4_TCB_UnbindNotification(self.cptr));
+        unsafe_as_result!(seL4_TCB_UnbindNotification(self.cptr))
     }
 
     /// Configure this thread with new parameters.
     #[inline(always)]
     pub fn configure(&self, config: ThreadConfiguration) -> ::Result {
-        errcheck!(seL4_TCB_Configure(self.cptr,
-                                     config.fault_handler,
-                                     config.priority,
-                                     config.cspace_root.to_cap(),
-                                     config.cspace_root_data,
-                                     config.vspace_root.to_cap(),
-                                     config.vspace_root_data,
-                                     config.buffer,
-                                     config.buffer_frame));
+        unsafe_as_result!(seL4_TCB_Configure(
+            self.cptr,
+            config.fault_handler,
+            config.priority,
+            config.cspace_root.to_cap(),
+            config.cspace_root_data,
+            config.vspace_root.to_cap(),
+            config.vspace_root_data,
+            config.buffer,
+            config.buffer_frame,
+        ))
     }
 
     /// Copy the registers from this thread to `dest`.
@@ -71,85 +85,53 @@ impl Thread {
     /// If `transfer_integer` is true, all the registers not transfered by `transfer_frame` will be
     /// transfered.
     #[inline(always)]
-    pub fn copy_registers(&self,
-                          dest: Thread,
-                          suspend_source: bool,
-                          resume_dest: bool,
-                          transfer_frame: bool,
-                          transfer_integer: bool,
-                          arch_flags: u8)
+    pub fn copy_registers(&self, dest: Thread, suspend_source: bool, resume_dest: bool,
+                          transfer_frame: bool, transfer_integer: bool, arch_flags: u8)
                           -> ::Result {
-        let suspend_source = if suspend_source {
-            1
-        } else {
-            0
-        };
-        let resume_dest = if resume_dest {
-            1
-        } else {
-            0
-        };
-        let transfer_frame = if transfer_frame {
-            1
-        } else {
-            0
-        };
-        let transfer_integer = if transfer_integer {
-            1
-        } else {
-            0
-        };
-        errcheck!(seL4_TCB_CopyRegisters(dest.cptr,
-                                         self.cptr,
-                                         suspend_source,
-                                         resume_dest,
-                                         transfer_frame,
-                                         transfer_integer,
-                                         arch_flags));
+        unsafe_as_result!(seL4_TCB_CopyRegisters(
+            dest.cptr,
+            self.cptr,
+            suspend_source as u8,
+            resume_dest as u8,
+            transfer_frame as u8,
+            transfer_integer as u8,
+            arch_flags,
+        ))
     }
 
     /// Read this thread's registers.
     ///
     /// If `suspend`, suspend this thread before copying.
     #[inline(always)]
-    pub fn read_registers(&self,
-                          suspend: bool,
-                          arch_flags: u8)
+    pub fn read_registers(&self, suspend: bool, arch_flags: u8)
                           -> Result<seL4_UserContext, ::Error> {
-        let suspend = if suspend {
-            1
-        } else {
-            0
-        };
+        // unsafe: mem: maybe use a Default::default() ?
         let mut regs = unsafe { ::core::mem::zeroed() };
-        let res = unsafe {
-            seL4_TCB_ReadRegisters(self.cptr,
-                                   suspend,
-                                   arch_flags,
-                                   (::core::mem::size_of::<seL4_UserContext>() / ::core::mem::size_of::<usize>()) as seL4_Word,
-                                   &mut regs)
-        };
-        if res == 0 {
-            Ok(regs)
-        } else {
-            Err(::Error(::GoOn::CheckIPCBuf))
-        }
+
+        unsafe_as_result!(seL4_TCB_ReadRegisters(
+            self.cptr,
+            suspend as u8,
+            arch_flags,
+            (::core::mem::size_of::<seL4_UserContext>() /
+                ::core::mem::size_of::<usize>()) as seL4_Word,
+            &mut regs,
+        )).map(|()| regs)
     }
 
     /// Resume this thread
     #[inline(always)]
     pub fn resume(&self) -> ::Result {
-        errcheck!(seL4_TCB_Resume(self.cptr));
+        unsafe_as_result!(seL4_TCB_Resume(self.cptr))
     }
 
     /// Set this thread's IPC buffer.
     ///
     /// `address` is where in the virtual address space the IPC buffer will be located, and `frame`
-    /// is a capability to the physical memory that will back that page. `address` must be
+    /// is a capability to the physical memory that will back that page.  `address` must be
     /// naturally aligned to 512-bytes.
     #[inline(always)]
     pub fn set_ipc_buffer(&self, address: seL4_Word, frame: seL4_CPtr) -> ::Result {
-        errcheck!(seL4_TCB_SetIPCBuffer(self.cptr, address, frame));
+        unsafe_as_result!(seL4_TCB_SetIPCBuffer(self.cptr, address, frame))
     }
 
     /// Set this thread's priority.
@@ -158,7 +140,7 @@ impl Thread {
     /// this request.
     #[inline(always)]
     pub fn set_priority(&self, priority: u8) -> ::Result {
-        errcheck!(seL4_TCB_SetPriority(self.cptr, priority));
+        unsafe_as_result!(seL4_TCB_SetPriority(self.cptr, priority))
     }
 
     /// Set this thread's fault endpoint, CSpace, and VSpace.
@@ -170,56 +152,45 @@ impl Thread {
     ///
     /// The VSpace root data is ignored on x86 and ARM.
     #[inline(always)]
-    pub fn set_space(&self,
-                     fault_endpoint: seL4_CPtr,
-                     cspace_root: CNode,
-                     cspace_root_data: seL4_CapData,
-                     vspace_root: seL4_CPtr,
+    pub fn set_space(&self, fault_endpoint: seL4_CPtr, cspace_root: CNode,
+                     cspace_root_data: seL4_CapData, vspace_root: seL4_CPtr,
                      vspace_root_data: seL4_CapData)
                      -> ::Result {
-        errcheck!(seL4_TCB_SetSpace(self.cptr,
-                                    fault_endpoint,
-                                    cspace_root.to_cap(),
-                                    cspace_root_data,
-                                    vspace_root,
-                                    vspace_root_data));
+        unsafe_as_result!(seL4_TCB_SetSpace(
+            self.cptr,
+            fault_endpoint,
+            cspace_root.to_cap(),
+            cspace_root_data,
+            vspace_root,
+            vspace_root_data,
+        ))
     }
 
     /// Suspend this thread.
     #[inline(always)]
     pub fn suspend(&self) -> ::Result {
-        errcheck!(seL4_TCB_Suspend(self.cptr));
+        unsafe_as_result!(seL4_TCB_Suspend(self.cptr))
     }
 
     /// Set this thread's registers from the provided context.
     ///
     /// If `resume`, resume this thread after writing.
     #[inline(always)]
-    pub fn write_registers(&self,
-                           resume: bool,
-                           arch_flags: u8,
-                           regs: &seL4_UserContext)
+    pub fn write_registers(&self, resume: bool, arch_flags: u8, regs: &seL4_UserContext)
                            -> ::Result {
-        let resume = if resume {
-            1
-        } else {
-            0
-        };
-        let res = unsafe {
-            seL4_TCB_WriteRegisters(self.cptr, resume, arch_flags,
-                                    (::core::mem::size_of::<seL4_UserContext>() / ::core::mem::size_of::<usize>()) as seL4_Word,
-                                    regs as *const seL4_UserContext as *mut _)
-        };
-        if res == 0 {
-            Ok(())
-        } else {
-            Err(::Error(::GoOn::CheckIPCBuf))
-        }
+        unsafe_as_result!(seL4_TCB_WriteRegisters(
+            self.cptr,
+            resume as u8,
+            arch_flags,
+            (::core::mem::size_of::<seL4_UserContext>() /
+                ::core::mem::size_of::<usize>()) as seL4_Word,
+            regs as *const seL4_UserContext as *mut _,
+        ))
     }
 
     /// Set this thread's domain.
     #[inline(always)]
     pub fn set_domain(&self, domain: u8, domain_control: ::DomainSet) -> ::Result {
-        errcheck!(seL4_DomainSet_Set(domain_control.to_cap(), domain, self.cptr));
+        unsafe_as_result!(seL4_DomainSet_Set(domain_control.to_cap(), domain, self.cptr))
     }
 }

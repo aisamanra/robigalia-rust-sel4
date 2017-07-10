@@ -7,16 +7,17 @@
 // notice may not be copied, modified, or distributed except
 // according to those terms.
 
-//! Controlling the domain of threads.
+#[cfg(target_arch = "x86")]
+mod x86;
+#[cfg(target_arch = "x86")]
+pub use self::x86::*;
 
-cap_wrapper!{ ()
-    /// Authority to set domains
-    DomainSet,
-}
+#[cfg(target_arch = "x86_64")]
+mod x86_64;
+#[cfg(target_arch = "x86_64")]
+pub use self::x86_64::*;
 
-impl DomainSet {
-    /// Change the domain of a thread.
-    pub fn set(&self, domain: u8, thread: ::Thread) -> ::Result {
-        thread.set_domain(domain, *self)
-    }
-}
+#[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
+mod arm;
+#[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
+pub use self::arm::*;

@@ -10,8 +10,8 @@
 //! Higher level interfaces to seL4 kernel objects.
 //!
 //! The intent of this crate is to provide mechanism, not policy, so the general flavour is still
-//! very low-level and architecture-specific details are not abstracted over. However, it should be
-//! more convenient than the raw sel4-sys functions and no less performant (once optimized, of
+//! very low-level and architecture-specific details are not abstracted over.  However, it should
+//! be more convenient than the raw sel4-sys functions and no less performant (once optimized, of
 //! course).
 //!
 //! **Note**: when method documentation says "this", it refers to the receiver of the thread, not
@@ -23,7 +23,31 @@
 #![doc(html_root_url = "https://doc.robigalia.org/")]
 
 extern crate sel4_sys;
-use sel4_sys::*;
+use sel4_sys::{seL4_CPtr, seL4_GetIPCBuffer, seL4_Word, seL4_Yield};
+
+#[macro_use]
+mod macros;
+
+mod alloc;
+mod arch;
+mod cspace;
+mod domain;
+mod endpoint;
+mod error;
+mod irq;
+mod notification;
+mod thread;
+
+pub use alloc::ObjectAllocator;
+pub use arch::*;
+pub use cspace::{Badge, CNode, CNodeInfo, SlotRef, Window};
+pub use domain::DomainSet;
+pub use endpoint::{Endpoint, RecvToken};
+pub use error::{ErrorDetails, LookupFailureKind};
+pub use irq::{IRQControl, IRQHandler};
+pub use notification::Notification;
+pub use thread::{Thread, ThreadConfiguration};
+
 
 // TODO: This should be a configuration option pulled from sel4 kernel config
 pub const CONFIG_RETYPE_FAN_OUT_LIMIT: usize = 256;
@@ -52,67 +76,6 @@ impl ToCap for seL4_CPtr {
     }
 }
 
-macro_rules! cap_wrapper {
-    ($($(#[$attr:meta])* : $name:ident $objtag:ident $size:expr)*) => ($(
-        cap_wrapper_inner!($(#[$attr])* : $name);
-        impl ::Allocatable for $name {
-            fn create(untyped_memory: ::sel4_sys::seL4_CPtr, mut dest: ::cspace::Window, size_bits: ::sel4_sys::seL4_Word) -> ::Result {
-                use ToCap;
-                use CONFIG_RETYPE_FAN_OUT_LIMIT;;
-                // Most we can create in one syscall is CONFIG_RETYPE_FAN_OUT_LIMIT (256)
-                while dest.num_slots > CONFIG_RETYPE_FAN_OUT_LIMIT {
-                    errcheck_noreturn!(seL4_Untyped_Retype(untyped_memory, $objtag as seL4_Word, size_bits, dest.cnode.root.to_cap(),
-                                    dest.cnode.cptr as seL4_Word, dest.cnode.depth as seL4_Word, dest.first_slot_idx as seL4_Word, CONFIG_RETYPE_FAN_OUT_LIMIT as seL4_Word));
-                    dest.first_slot_idx += CONFIG_RETYPE_FAN_OUT_LIMIT;
-                    dest.num_slots -= CONFIG_RETYPE_FAN_OUT_LIMIT;
-                }
-                if dest.num_slots > 0 {
-                    errcheck!(seL4_Untyped_Retype(untyped_memory, $objtag as seL4_Word, size_bits, dest.cnode.root.to_cap(),
-                                    dest.cnode.cptr as seL4_Word, dest.cnode.depth as seL4_Word, dest.first_slot_idx as seL4_Word, dest.num_slots as seL4_Word));
-                }
-                Ok(())
-            }
-
-            fn object_size(size_bits: seL4_Word) -> isize {
-                $size(size_bits) as isize
-            }
-        }
-    )*)
-}
-
-macro_rules! cap_wrapper_inner {
-    ($($(#[$attr:meta])* : $name:ident)*) => ($(
-        #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-        $(#[$attr])* pub struct $name {
-            cptr: ::sel4_sys::seL4_CPtr,
-        }
-        impl ::ToCap for $name {
-            #[inline(always)]
-            fn to_cap(&self) -> ::sel4_sys::seL4_CPtr {
-                self.cptr.to_cap()
-            }
-        }
-        impl $name {
-            #[inline(always)]
-            pub const fn from_cap(cptr: ::sel4_sys::seL4_CPtr) -> Self {
-                $name { cptr: cptr }
-            }
-        }
-    )*)
-}
-
-macro_rules! errcheck {
-    ($e:expr) => {
-        if unsafe { $e } == 0 { return Ok(()) } else { return Err(::Error(::GoOn::CheckIPCBuf)) }
-    }
-}
-
-macro_rules! errcheck_noreturn {
-    ($e:expr) => {
-        if unsafe { $e } != 0 { return Err(::Error(::GoOn::CheckIPCBuf)); }
-    }
-}
-
 /// An error occured.
 ///
 /// Since seL4 stores error information in the IPC buffer, and copying that data is not free, to
@@ -125,16 +88,19 @@ pub struct Error(pub GoOn);
 pub enum GoOn {
     CheckIPCBuf,
     TooMuchData,
-    TooManyCaps, // WouldBlock,
+    TooManyCaps,
+//  WouldBlock,
 }
 
 impl core::fmt::Debug for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self.0 {
-            GoOn::CheckIPCBuf => match self.details() {
-                Some(deets) => write!(f, "{:?} ({})", deets, deets),
-                None => write!(f, "no error")
-            },
+            GoOn::CheckIPCBuf => {
+                match self.details() {
+                    Some(deets) => write!(f, "{:?} ({})", deets, deets),
+                    None => write!(f, "no error"),
+                }
+            }
             GoOn::TooMuchData => f.write_str("TooMuchData"),
             GoOn::TooManyCaps => f.write_str("TooManyCaps"),
         }
@@ -146,7 +112,7 @@ pub fn set_cap_destination(slot: SlotRef) {
     unsafe {
         let buf = seL4_GetIPCBuffer();
         (*buf).receiveCNode = slot.root.to_cap();
-        (*buf).receiveIndex = slot.cptr as seL4_Word;
+        (*buf).receiveIndex = slot.cptr;
         (*buf).receiveDepth = slot.depth as seL4_Word;
     }
 }
@@ -155,9 +121,11 @@ pub fn set_cap_destination(slot: SlotRef) {
 pub fn get_cap_destination() -> SlotRef {
     unsafe {
         let buf = seL4_GetIPCBuffer();
-        SlotRef::new(CNode::from_cap((*buf).receiveCNode),
-                     (*buf).receiveIndex,
-                     (*buf).receiveDepth as u8)
+        SlotRef::new(CNode::from_cap(
+            (*buf).receiveCNode),
+            (*buf).receiveIndex,
+            (*buf).receiveDepth as u8,
+        )
     }
 }
 
@@ -171,6 +139,7 @@ pub fn yield_now() {
 
 /// A handle for using core::fmt with seL4_DebugPutChar
 pub struct DebugOutHandle;
+
 impl ::core::fmt::Write for DebugOutHandle {
     fn write_str(&mut self, s: &str) -> ::core::fmt::Result {
         for &b in s.as_bytes() {
@@ -179,40 +148,3 @@ impl ::core::fmt::Write for DebugOutHandle {
         Ok(())
     }
 }
-
-#[macro_export]
-macro_rules! println {
-    ($($toks:tt)*) => ({ use ::core::fmt::Write; let _ = writeln!($crate::DebugOutHandle, $($toks)*); })
-}
-
-mod cspace;
-mod error;
-mod endpoint;
-mod notification;
-mod thread;
-mod domain;
-mod irq;
-mod alloc;
-
-#[cfg(target_arch = "x86")]
-mod arch {
-    include!("arch/x86.rs");
-}
-#[cfg(target_arch = "x86_64")]
-mod arch {
-    include!("arch/x86_64.rs");
-}
-#[cfg(all(target_arch = "arm", target_pointer_width = "32"))]
-mod arch {
-    include!("arch/arm.rs");
-}
-
-pub use cspace::{CNode, SlotRef, Badge, Window, CNodeInfo};
-pub use error::{ErrorDetails, LookupFailureKind};
-pub use endpoint::{Endpoint, RecvToken};
-pub use notification::Notification;
-pub use thread::{Thread, ThreadConfiguration};
-pub use domain::DomainSet;
-pub use irq::{IRQControl, IRQHandler};
-pub use arch::*;
-pub use alloc::{ObjectAllocator};

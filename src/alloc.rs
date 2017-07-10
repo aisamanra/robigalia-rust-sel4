@@ -19,11 +19,14 @@ pub trait ObjectAllocator {
 
     /// Otherwise, allocate a slot in this thread's CSpace.
     fn allocate_slot(&self) -> Option<SlotRef>;
+
     /// Mark a slot unused and available for allocation.
     fn free_slot(&self, slot: SlotRef) -> Result<(), Self::SlotFreeError>;
 
     /// Allocate an object, storing the capability into the specified slot.
-    fn allocate_object<T: Allocatable>(&self, dest: SlotRef) -> Result<Option<T>, Self::ObjectAllocError>;
+    fn allocate_object<T: Allocatable>(&self, dest: SlotRef)
+                                       -> Result<Option<T>, Self::ObjectAllocError>;
+
     /// Free an object, deleting it (thus removing it from the capability derivation tree) and
     /// return the memory for use by the allocator.
     fn free_object<T: Allocatable>(&self, obj: T) -> Result<(), Self::ObjectFreeError>;
